@@ -32,13 +32,19 @@
 #
 # Add --server=/.docker/127.0.0.1#5353 to dnsmasq command line in /etc/init/lxc-net
 
-flynn/etcd: -bind-addr=0.0.0.0
-flynn/discoverd: -etcd http://etcd.docker:4001
+flynn/etcd:
+    cmd: -bind-addr=0.0.0.0:4001
+    ports: {4001: 'host'}
+
+flynn/discoverd:
+    # TODO: --link to discoverd
+    cmd: -etcd http://{HOST}:4001
+    ports: {1111: 'host'}
 
 elsdoerfer/shelf:
-    entrypoint: /bin/sh
-    # BAH: https://github.com/flynn/sdutil/issues/4
-    cmd: >
-      -c '/bin/sdutil exec -h "$(ifconfig eth0  | grep '\''inet addr:'\''  | cut -d: -f2 | awk '\''{ print $1}'\'')" shelf:8888 /bin/shelf'
+    cmd: exec -i eth0 shelf:8888 /bin/shelf
+    entrypoint: /bin/sdutil
     volumes: [/var/lib/shelf]
 
+elsdoerfer/strowger:
+  ports: {80: wan, 443: wan}
