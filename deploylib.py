@@ -364,14 +364,13 @@ class Host(object):
 
 
     def fmt_docker_options(self, image, name, volumes, env, ports, cmd, entrypoint):
-        return '{name} {entrypoint} {volumes} {dns} {ports} {env} {image} {cmd}'.format(
+        return '{name} {entrypoint} {volumes} {ports} {env} {image} {cmd}'.format(
             image=image,
             name='--name "{}"'.format(name) if name else '',
             volumes=' '.join(['-v "%s:%s"' % (h, g) for h, g in volumes.items()]),
             env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()]),
             ports=' '.join(['-p %s:%s' % (k, v) for k, v in ports.items()]),
             cmd=cmd,
-            dns='-dns 10.0.3.1',
             entrypoint='-entrypoint {}'.format(entrypoint) if entrypoint else ''
         )
 
