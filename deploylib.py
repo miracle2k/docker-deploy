@@ -318,7 +318,7 @@ class Host(object):
                 pass
 
         # Construct a name, for informative purposes only
-        name = namer(service) if namer else "{}-{}".format(deploy_id, uuid.uuid4().hex[:5])
+        container_name = namer(service) if namer else "{}-{}".format(deploy_id, uuid.uuid4().hex[:5])
 
         # Make sure the volumes exist
         for host_path in cmd_volumes.keys():
@@ -335,15 +335,15 @@ class Host(object):
         #      "docker insert", or by executing a docker build file.
         if 'register' in service:
             cmd = service.cmd
-            for port, name in service.register.items():
+            for port, pname in service.register.items():
                 cmd = '/sdutil exec -i eth0 {did}:{sname}:{pname}:{p} {cmd}'.format(
-                    did=deploy_id, sname=service.name, pname=name, p=port, cmd=cmd)
+                    did=deploy_id, sname=service.name, pname=pname, p=port, cmd=cmd)
             service.cmd = cmd[len('/sdutil '):]
             service.entrypoint = '/sdutil'
 
         # Run the container
         optstring = self.fmt_docker_options(
-            service.image, name, cmd_volumes, cmd_env, cmd_ports,
+            service.image, container_name, cmd_volumes, cmd_env, cmd_ports,
             service.cmd, service.entrypoint)
         optstring = optstring.format(**cmd_vars)
         print(optstring)
