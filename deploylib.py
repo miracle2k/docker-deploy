@@ -63,7 +63,8 @@ class Service(dict):
             Illegal.
 
         (TODO: Needs reworking: What if I want to specify an exposure
-        for a PORT:PORT mapping?
+        for a PORT:PORT mapping? The strowger bootstrapped service
+        is an example of this actually)
 
         Exposure values for ports are:
 

@@ -24,4 +24,5 @@ elsdoerfer/shelf:
     volumes: [/var/lib/shelf]
 
 elsdoerfer/strowger:
+  cmd: -httpaddr=":80" --httpsaddr=":443"
   ports: {80: wan, 443: wan, 1115: host}
