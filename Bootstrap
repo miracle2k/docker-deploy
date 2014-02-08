@@ -14,6 +14,8 @@ flynn/discoverd:
     # TODO: --link to discoverd
     cmd: -etcd http://{HOST}:4001
     ports: {1111: 'host'}
+    env:
+      EXTERNAL_IP: "{HOST}"
 
 elsdoerfer/shelf:
     cmd: exec -i eth0 shelf:8888 /bin/shelf
@@ -21,4 +23,4 @@ elsdoerfer/shelf:
     volumes: [/var/lib/shelf]
 
 elsdoerfer/strowger:
-  ports: {80: wan, 443: wan}
+  ports: {80: wan, 443: wan, 1115: host}
