@@ -59,7 +59,7 @@ def main(argv):
 
     elif args['init']:
         # Apply the Bootstrap service file
-        servicefile = ServiceFile.load(path(dirname(__file__), 'Bootstrap'), ordered=True)
+        servicefile = ServiceFile.load(path(dirname(__file__), 'Bootstrap'))
         host = Host(args['<host>'])
         namer = lambda s: s.name   # Use literal names so we can find them
         host.deploy_servicefile('_sys_', servicefile, namer=namer)

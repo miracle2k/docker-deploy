@@ -134,11 +134,15 @@ class ServiceFile(dict):
     """A file listing multiple services."""
 
     @classmethod
-    def load(cls, filename, ordered=False):
+    def load(cls, filename):
         with open(filename, 'r') as f:
-            opts = {}
-            if ordered:
-                opts={'Loader': OrderedDictYAMLLoader}
+            # Services should generally not depend on a specific order,
+            # instead rely on service discovery.
+            # There is one exception though: When deploying an initial
+            # template, a database might need to be initialized first
+            # to setup a user account, before that user account can be
+            # added to another containers environment.
+            opts={'Loader': OrderedDictYAMLLoader}
             structure = yaml.load(f, **opts)
 
         servicefile = cls()
