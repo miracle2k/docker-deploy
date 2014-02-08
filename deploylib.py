@@ -1,7 +1,7 @@
 import contextlib
 import json
 import os
-from os.path import join as path, dirname, abspath
+from os.path import join as path, dirname, abspath, exists
 import random
 import tempfile
 import uuid
@@ -162,6 +162,10 @@ class ServiceFile(dict):
         dict.__init__(other_data or {})
         self.name = name
         self.services = services or []
+
+    def path(self, p):
+        """Make the given path absolute."""
+        return abspath(path(dirname(self.filename), p))
 
 
 class Host(object):
@@ -462,16 +466,38 @@ class AppPlugin(Plugin):
         }), )
 
 
-class DomainPlugin(object):
+class DomainPlugin(Plugin):
+    """Will process a Domains section, which defines domains
+    and maps them to services, and register those mappings with
+    the strowger router.
     """
 
-    """
+    def post_deploy(self, servicefile):
+        domains = servicefile.get('Domains', {})
+        if not domains:
+            return
 
-    #def deploy(self, deploy_id, service):
-    #    ask discoverd for router RPC address
-    #
-    #    foreach domain:
-    #        register with service name and ssl cert
+        rpc_ip = self.host.discover('flynn-strowger-rpc')
 
+        for domain, data in domains.items():
+            cert = key = None
+            if 'cert' in data:
+                cert = open(servicefile.path(data['cert']), 'r').read()
+                key_paths = [servicefile.path(data['key'])]
+                if 'KEY_PATH' in os.environ:
+                    key_paths.append(path(os.environ['KEY_PATH'], data['key']))
+                for candidate in key_paths:
+                    if exists(candidate):
+                        key = open(candidate, 'r').read()
+                if not key:
+                    raise ValueError('key not found in: %s' % key_paths)
 
+            self.host.e(run,
+                'strowger-rpc -rpc {rpc} {ssh} {domain} {sname}'.format(
+                    rpc=rpc_ip,
+                    ssh='-cert "{cert}" -key "{key}"'.format(cert=cert, key=key) if cert else '',
+                    domain=domain,
+                    sname=data['service-name']
+                ))
 
+        # TODO: Support further plugins to configure the domain DNS
