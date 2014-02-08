@@ -1,36 +1,10 @@
-# etcd and discoverd provide service discovery. So to connect those
-# two we have a couple of options:
+# This install some base images that are required on the host, notably
+# etcd and discoverd. They are special in that they provide service
+# discovery, so they can't rely on it themselves. While discoverd needs
+# etcd, the bigger challenge is that everything needs discoverd.
 #
-#   - Let the deploy tool provide the ip. This means restarting one
-#     requires restarting the other, unless: a) docker allows persistent
-#     ips at some point, or b) dockers --link functionality would take
-#     care of such a restart for us.
-#
-#   - Use DNS; requires configuring dnsmasq, probably also stable container
-#     names.
-#
-#   - Run both in a single container.
-#
-#   - Expose their ports on the host
-#
-# discoverd address really needs to be available via DNS, because
-# essentially *all* containers depend on it. Strowger also wants
-# to work directly with etcd directly. So rather than causing everthing
-# to restart when these two change, we use DNS to provide them.
-
-# XXX: Currently, docker-dns and dnsmasq need to be installed manually.
-# I think this could run in a container though, with the DNS port exposed
-# on the local host.
-#
-# docker-dns config:
-# CONFIG = {
-#  'docker_url': 'http://127.0.0.1:4243',
-#  'bind_interface': '127.0.0.1',
-#  'bind_port': 5353,
-#  'no_nxdomain': False
-#}
-#
-# Add --server=/.docker/127.0.0.1#5353 to dnsmasq command line in /etc/init/lxc-net
+# There are only two options: DNS or host mapped ports, and DNS is harder
+# to do and has the caching issue.
 
 flynn/etcd:
     cmd: -bind-addr=0.0.0.0:4001
