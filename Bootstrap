@@ -7,11 +7,12 @@
 # to do and has the caching issue.
 
 flynn/etcd:
-    cmd: -bind-addr=0.0.0.0:4001
+    cmd: -name {HOST} -data-dir /data.etcd -bind-addr=0.0.0.0:4001
+    volumes: [/data.etcd]
     ports: {4001: 'host'}
 
 flynn/discoverd:
-    # TODO: --link to discoverd
+    # TODO: --link to etcd
     cmd: -etcd http://{HOST}:4001
     ports: {1111: 'host'}
     env:
