@@ -130,7 +130,7 @@ class Service(dict):
         return self.from_file.path(p)
 
 
-class ServiceFile(dict):
+class ServiceFile(object):
     """A file listing multiple services."""
 
     @classmethod
@@ -154,22 +154,54 @@ class ServiceFile(dict):
                 continue
             if name[0].isupper():
                 # Uppercase idents are non-service types
-                servicefile.update({name: service})
+                servicefile.data.update({name: service})
                 continue
             service = Service(name, service)
             service.from_file = servicefile
             servicefile.services.append(service)
 
+        # Resolve includes:
+        for include in servicefile.data.get('Includes', []):
+            sf = ServiceFile.load(include)
+            sf.from_file = servicefile
+            new_data = sf.data
+            # Merge one level deep
+            for key, value in servicefile.data.items():
+                if isinstance(value, dict):
+                    new_data.setdefault(key, {})
+                    new_data[key].update(value)
+                # TODO: lists
+                else:
+                    new_data[key] = value
+            servicefile.data = new_data
+            servicefile.services.extend(sf.services)
+
         return servicefile
 
     def __init__(self, name=None, services=None, other_data=None):
-        dict.__init__(other_data or {})
+        self.data = other_data or {}
         self.name = name
         self.services = services or []
+        self.from_file = None
 
     def path(self, p):
         """Make the given path absolute."""
         return abspath(path(dirname(self.filename), p))
+
+    def __getitem__(self, item):
+        return self.data[item]
+
+    @property
+    def root(self):
+        """If a service file was included, this finds the root."""
+        sf = self
+        while sf.from_file:
+            sf = sf.from_file
+        return sf
+
+    @property
+    def env(self):
+        return self.root.data.get('Env')
 
 
 class Host(object):
@@ -307,7 +339,7 @@ class Host(object):
             cmd_ports[port] = internal
 
         # The environment variables
-        cmd_env = {}
+        cmd_env = service.from_file.env.get(service.name, {}).copy()
         cmd_env['DISCOVERD'] = '%s:1111' % host_ip
         cmd_env['ETCD'] = 'http://%s:4001' % host_ip
         cmd_env.update(service.env)
@@ -465,7 +497,8 @@ class AppPlugin(Plugin):
             'image': 'elsdoerfer/slugrunner',
             'cmd': 'start {proc}'.format(proc=service.cmd),
             'env': env,
-            'volumes': service.volumes
+            'volumes': service.volumes,
+            'from_file': service.from_file
         }), )
 
 
@@ -476,7 +509,7 @@ class DomainPlugin(Plugin):
     """
 
     def post_deploy(self, servicefile):
-        domains = servicefile.get('Domains', {})
+        domains = servicefile.data.get('Domains', {})
         if not domains:
             return
 
