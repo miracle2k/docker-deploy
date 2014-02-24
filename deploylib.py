@@ -201,7 +201,7 @@ class ServiceFile(object):
 
     @property
     def env(self):
-        return self.root.data.get('Env')
+        return self.root.data.get('Env') or {}
 
 
 class Host(object):
@@ -339,7 +339,7 @@ class Host(object):
             cmd_ports[port] = internal
 
         # The environment variables
-        cmd_env = service.from_file.env.get(service.name, {}).copy()
+        cmd_env = (service.from_file.env.get(service.name, {}) or {}).copy()
         cmd_env['DISCOVERD'] = '%s:1111' % host_ip
         cmd_env['ETCD'] = 'http://%s:4001' % host_ip
         cmd_env.update(service.env)
