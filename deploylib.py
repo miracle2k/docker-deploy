@@ -306,7 +306,7 @@ class Host(object):
         cmd_vars['HOST'] = host_ip
 
         # Make sure the docker image is available
-        self.docker('pull {}', service.image)
+        #self.docker('pull {}', service.image)
 
         # Determine the volumes on the host
         cmd_volumes = {}
