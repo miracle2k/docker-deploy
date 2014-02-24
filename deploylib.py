@@ -462,19 +462,19 @@ class AppPlugin(Plugin):
         # container that presumably needs to unpack the slug every time. Maybe
         # we could also commit the slugrunner container after the first run?
         cache_dir = self.host.cache('slugbuilder', deploy_id, service.name)
+        env = self.get_env(deploy_id, service, slug_url)
         cmds = [
             'mkdir -p "%s"' % cache_dir,
-            'cat {} | docker run -v {cache}:/tmp/cache:rw -i -a stdin -a stdout flynn/slugbuilder {outuri}'.format(
-                remote_temp, outuri=slug_url, cache=cache_dir
+            'cat {} | docker run -v {cache}:/tmp/cache:rw {env} -i -a stdin -a stdout elsdoerfer/slugbuilder {outuri}'.format(
+                remote_temp, outuri=slug_url, cache=cache_dir,
+                env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()]),
             )
         ]
         self.e(run, ' && '.join(cmds))
 
         return slug_url
 
-    def deploy(self, deploy_id, service):
-        slug_url = self.build(deploy_id, service)
-
+    def get_env(self, deploy_id, service, slug_url):
         # In addition to the service defined ENV, add some of our own.
         # These give the container access to service discovery
         env = {
@@ -484,6 +484,12 @@ class AppPlugin(Plugin):
            'SD_ARGS': 'exec -i eth0 {}:{}:{}'.format(deploy_id, service.name, 8000)
         }
         env.update(service.env)
+        return env
+
+    def deploy(self, deploy_id, service):
+        slug_url = self.build(deploy_id, service)
+
+        env = self.get_env(deploy_id, service, slug_url)
 
         deps = ['-d {}:{}:{}'.format(varname, deploy_id, sname)
                 for sname, varname in service.get('expose', {}).items()]
