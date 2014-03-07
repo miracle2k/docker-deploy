@@ -8,62 +8,7 @@ import uuid
 from fabric.api import execute, run, get, put, local
 import io
 import yaml
-
-
-@contextlib.contextmanager
-def directory(path):
-    old = os.getcwd()
-    os.chdir(path)
-    yield
-    os.chdir(old)
-
-
-import yaml
-import yaml.constructor
-
-try:
-    # included in standard lib from Python 2.7
-    from collections import OrderedDict
-except ImportError:
-    # try importing the backported drop-in replacement
-    # it's available on PyPI
-    from ordereddict import OrderedDict
-
-class OrderedDictYAMLLoader(yaml.Loader):
-    """
-    A YAML loader that loads mappings into ordered dictionaries.
-    """
-
-    def __init__(self, *args, **kwargs):
-        yaml.Loader.__init__(self, *args, **kwargs)
-
-        self.add_constructor(u'tag:yaml.org,2002:map', type(self).construct_yaml_map)
-        self.add_constructor(u'tag:yaml.org,2002:omap', type(self).construct_yaml_map)
-
-    def construct_yaml_map(self, node):
-        data = OrderedDict()
-        yield data
-        value = self.construct_mapping(node)
-        data.update(value)
-
-    def construct_mapping(self, node, deep=False):
-        if isinstance(node, yaml.MappingNode):
-            self.flatten_mapping(node)
-        else:
-            raise yaml.constructor.ConstructorError(None, None,
-                'expected a mapping node, but found %s' % node.id, node.start_mark)
-
-        mapping = OrderedDict()
-        for key_node, value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            try:
-                hash(key)
-            except TypeError, exc:
-                raise yaml.constructor.ConstructorError('while constructing a mapping',
-                    node.start_mark, 'found unacceptable key (%s)' % exc, key_node.start_mark)
-            value = self.construct_object(value_node, deep=deep)
-            mapping[key] = value
-        return mapping
+from .utils import OrderedDictYAMLLoader
 
 
 class Service(dict):
@@ -204,6 +149,13 @@ class ServiceFile(object):
         return self.root.data.get('Env') or {}
 
 
+class Plugin(object):
+
+    def __init__(self, host):
+        self.host = host
+        self.e = self.host.e
+
+
 class Host(object):
     """Represents the host management service.
 
@@ -223,7 +175,10 @@ class Host(object):
         self.host = hoststr
         self.volume_base = '/srv/vdata'
         self.state_base = '/srv/vstate'
-        self.plugins = [AppPlugin(self)]
+
+        from .plugins.app import AppPlugin
+        from .plugins.domains import DomainPlugin
+        self.plugins = [AppPlugin(self), DomainPlugin(self)]
 
     def docker(self, cmdline, *args, **kwargs):
         return self.e(run, 'docker %s' % cmdline.format(*args, **kwargs))
@@ -288,14 +243,21 @@ class Host(object):
         for service in servicefile.services:
             self.deploy_service(deploy_id, service, **kwargs)
 
-        DomainPlugin(self).post_deploy(servicefile)
+        self.run_plugins('post_deploy', servicefile)
 
     def deploy_service(self, deploy_id, service, **kwargs):
-        for plugin in self.plugins:
-            if plugin.deploy(deploy_id, service):
-                break
-        else:
+        if not self.run_plugins('deploy', deploy_id, service):
             return self.deploy_docker_image(deploy_id, service, **kwargs)
+
+    def run_plugins(self, method_name, *args, **kwargs):
+        for plugin in self.plugins:
+            method = getattr(plugin, method_name, None)
+            if not method:
+                continue
+            if method(*args, **kwargs):
+                return True
+        else:
+            return False
 
     def deploy_docker_image(self, deploy_id, service, namer=None):
         """Deploy a regular docker image.
@@ -412,139 +374,3 @@ class Host(object):
             entrypoint='-entrypoint {}'.format(entrypoint) if entrypoint else ''
         )
 
-
-class Plugin(object):
-
-    def __init__(self, host):
-        self.host = host
-        self.e = self.host.e
-
-
-class AppPlugin(Plugin):
-    """Will run a 12-factor style app.
-    """
-
-    def build(self, deploy_id, service):
-        e = self.e
-        l = lambda cmd, *a, **kw: self.e(local, cmd.format(*a, **kw), capture=True)
-
-        # Detect the shelve service first
-        shelf_ip = self.host.discover('shelf')
-
-        # The given path may be a subdirectory of a repo
-        # For git archive to work right we need the sub path relative
-        # to the repository root.
-        project_path = service.path(service.git)
-        with directory(project_path):
-            git_root = l('git rev-parse --show-toplevel')
-            gitsubdir = project_path[len(git_root):]
-
-        # Determine git version
-        with directory(project_path):
-            app_version = l('git rev-parse HEAD')[:10]
-
-        release_id = "{}/{}:{}".format(deploy_id, service.name, app_version)
-        slug_url = 'http://{}{}'.format(shelf_ip, '/slugs/{}'.format(release_id))
-
-        # Check if the file exists already
-        statuscode = e(run, "curl -s -o /dev/null -w '%{http_code}' --head " + slug_url)
-        if statuscode == '200':
-            return slug_url
-
-        # Create and push the git archive
-        remote_temp = '/tmp/{}'.format(uuid.uuid4().hex)
-        with directory(project_path):
-            temp = tempfile.mktemp()
-            l('git archive HEAD:{} > {}', gitsubdir, temp)
-            e(put, temp, remote_temp)
-            l('rm {}', temp)
-
-        # Build into a slug
-        # Note: buildstep would give us a real exclusive image, rather than a
-        # container that presumably needs to unpack the slug every time. Maybe
-        # we could also commit the slugrunner container after the first run?
-        cache_dir = self.host.cache('slugbuilder', deploy_id, service.name)
-        env = self.get_env(deploy_id, service, slug_url)
-        cmds = [
-            'mkdir -p "%s"' % cache_dir,
-            'cat {} | docker run -v {cache}:/tmp/cache:rw {env} -i -a stdin -a stdout elsdoerfer/slugbuilder {outuri}'.format(
-                remote_temp, outuri=slug_url, cache=cache_dir,
-                env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()]),
-            )
-        ]
-        self.e(run, ' && '.join(cmds))
-
-        return slug_url
-
-    def get_env(self, deploy_id, service, slug_url):
-        # In addition to the service defined ENV, add some of our own.
-        # These give the container access to service discovery
-        env = {
-           'APP_ID': deploy_id,
-           'SLUG_URL': slug_url,
-           'PORT': '8000',
-           'SD_ARGS': 'exec -i eth0 {}:{}:{}'.format(deploy_id, service.name, 8000)
-        }
-        env.update(service.env)
-        return env
-
-    def deploy(self, deploy_id, service):
-        if not 'git' in service:
-            return
-
-        slug_url = self.build(deploy_id, service)
-
-        env = self.get_env(deploy_id, service, slug_url)
-
-        deps = ['-d {}:{}:{}'.format(varname, deploy_id, sname)
-                for sname, varname in service.get('expose', {}).items()]
-        if deps:
-            env['SD_ARGS'] = 'expose {deps} {cmd}'.format(
-                deps=' '.join(deps),
-                cmd='sdutil %s' % env['SD_ARGS']
-            )
-
-        self.host.deploy_docker_image(deploy_id, Service(service.name, {
-            'image': 'elsdoerfer/slugrunner',
-            'cmd': 'start {proc}'.format(proc=service.cmd),
-            'env': env,
-            'volumes': service.volumes,
-            'from_file': service.from_file
-        }), )
-
-
-class DomainPlugin(Plugin):
-    """Will process a Domains section, which defines domains
-    and maps them to services, and register those mappings with
-    the strowger router.
-    """
-
-    def post_deploy(self, servicefile):
-        domains = servicefile.data.get('Domains', {})
-        if not domains:
-            return
-
-        rpc_ip = self.host.discover('flynn-strowger-rpc')
-
-        for domain, data in domains.items():
-            cert = key = None
-            if 'cert' in data:
-                cert = open(servicefile.path(data['cert']), 'r').read()
-                key_paths = [servicefile.path(data['key'])]
-                if 'KEY_PATH' in os.environ:
-                    key_paths.append(path(os.environ['KEY_PATH'], data['key']))
-                for candidate in key_paths:
-                    if exists(candidate):
-                        key = open(candidate, 'r').read()
-                if not key:
-                    raise ValueError('key not found in: %s' % key_paths)
-
-            self.host.e(run,
-                'strowger-rpc -rpc {rpc} {ssh} {domain} {sname}'.format(
-                    rpc=rpc_ip,
-                    ssh='-cert "{cert}" -key "{key}"'.format(cert=cert, key=key) if cert else '',
-                    domain=domain,
-                    sname=data['service-name']
-                ))
-
-        # TODO: Support further plugins to configure the domain DNS
