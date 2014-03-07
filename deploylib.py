@@ -223,6 +223,7 @@ class Host(object):
         self.host = hoststr
         self.volume_base = '/srv/vdata'
         self.state_base = '/srv/vstate'
+        self.plugins = [AppPlugin(self)]
 
     def docker(self, cmdline, *args, **kwargs):
         return self.e(run, 'docker %s' % cmdline.format(*args, **kwargs))
@@ -290,8 +291,9 @@ class Host(object):
         DomainPlugin(self).post_deploy(servicefile)
 
     def deploy_service(self, deploy_id, service, **kwargs):
-        if 'git' in service:
-            return AppPlugin(self).deploy(deploy_id, service)
+        for plugin in self.plugins:
+            if plugin.deploy(deploy_id, service):
+                break
         else:
             return self.deploy_docker_image(deploy_id, service, **kwargs)
 
@@ -487,6 +489,9 @@ class AppPlugin(Plugin):
         return env
 
     def deploy(self, deploy_id, service):
+        if not 'git' in service:
+            return
+
         slug_url = self.build(deploy_id, service)
 
         env = self.get_env(deploy_id, service, slug_url)
