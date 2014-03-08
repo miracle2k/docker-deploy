@@ -1,5 +1,4 @@
-from fabric.api import execute, run, get, put, local
-from .. import Plugin
+from . import Plugin
 
 
 class AppPlugin(Plugin):

@@ -19,7 +19,7 @@ There were a couple of design goals here for me:
 1. I want the language to describe containers to be at least as or easier
    than running containers manually.
 
-2. Once I'e layout out the services required for an app, I want to be able
+2. Once I've layed out the services required for an app, I want to be able
    to easily run multiple instances of it (a staging version, or instances
    for different customers).
 

@@ -1,4 +1,4 @@
-from .. import Plugin
+from . import Plugin
 
 
 class DomainPlugin(Plugin):

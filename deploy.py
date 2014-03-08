@@ -25,44 +25,44 @@ Restart a given instance within the deploy.
 """
 
 import sys
+import os
 from os.path import join as path, dirname
 from docopt import docopt
-from deploylib import ServiceFile, Host
+from urlparse import urljoin
+import json
+from deploylib.service import ServiceFile
+import requests
 
 
 def main(argv):
     """
     Usage:
-      deploy.py --host=<host> create <deploy-id> <service-file>
-      deploy.py --host=<host> update <deploy-id> <service-file>
-      deploy.py --host=<host> list
+      deploy.py create <deploy-id> <service-file>
+      deploy.py update <deploy-id> <service-file>
+      deploy.py list
       deploy.py init <host>
     """
     args = docopt(main.__doc__, argv)
+    deploy_url = os.environ.get('DEPLOY_URL', 'http://localhost:5000/api')
 
-    if args['update']:
-        # TODO: Validate the instance exists.
+    session = requests.Session()
+    session.headers = {'content-type': 'application/json'}
+
+    if args['update'] or args['create']:
         servicefile = ServiceFile.load(args['<service-file>'])
-        host = Host(args['--host'])
         deploy_id = args['<deploy-id>']
-        host.deploy_servicefile(deploy_id, servicefile)
-
-    elif args['create']:
-        # TODO: not that different than update, but validate the instance
-        # does not yet exist.
-        raise NotImplementedError()
+        result = session.post(
+            urljoin(deploy_url, '/create' if args['create'] else '/update'), data=json.dumps({
+                'deploy_id': deploy_id, 'servicefile': 'servicefile'})).json()
+        print(result)
 
     elif args['list']:
-        host = Host(args['--host'])
-        for i in host.get_instances():
-            print(i)
+        result = requests.get(urljoin(deploy_url, '/list'), data={}).json()
+        print(result)
 
     elif args['init']:
-        # Apply the Bootstrap service file
-        servicefile = ServiceFile.load(path(dirname(__file__), 'Bootstrap'))
-        host = Host(args['<host>'])
-        namer = lambda s: s.name   # Use literal names so we can find them
-        host.deploy_servicefile('_sys_', servicefile, namer=namer)
+        result = requests.get(urljoin(deploy_url, '/init'), data={}).json()
+        print(result)
 
 
 if __name__ == '__main__':
