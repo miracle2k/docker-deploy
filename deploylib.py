@@ -78,6 +78,7 @@ class Service(dict):
         data.setdefault('entrypoint', '')
         data.setdefault('env', {})
         data.setdefault('ports', {})
+        data.setdefault('privileged', False)
 
         dict.__init__(self, data)
 
@@ -380,7 +381,7 @@ class Host(object):
         # Run the container
         optstring = self.fmt_docker_options(
             service.image, container_name, cmd_volumes, cmd_env, cmd_ports,
-            service.cmd, service.entrypoint)
+            service.cmd, service.entrypoint, service.privileged)
         optstring = optstring.format(**cmd_vars)
         print(optstring)
         new_id = self.docker('run -d {}', optstring)
@@ -398,16 +399,16 @@ class Host(object):
         else:
             return self.e(run, "/sbin/ifconfig %s | grep 'inet addr' | cut -d: -f2 | awk '{print $1}'" % interface)
 
-
-    def fmt_docker_options(self, image, name, volumes, env, ports, cmd, entrypoint):
-        return '{name} {entrypoint} {volumes} {ports} {env} {image} {cmd}'.format(
+    def fmt_docker_options(self, image, name, volumes, env, ports, cmd, entrypoint, privileged):
+        return '{name} {entrypoint} {privileged} {volumes} {ports} {env} {image} {cmd}'.format(
             image=image,
             name='--name "{}"'.format(name) if name else '',
             volumes=' '.join(['-v "%s:%s"' % (h, g) for h, g in volumes.items()]),
             env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()]),
             ports=' '.join(['-p %s:%s' % (k, v) for k, v in ports.items()]),
             cmd=cmd,
-            entrypoint='-entrypoint {}'.format(entrypoint) if entrypoint else ''
+            entrypoint='-entrypoint {}'.format(entrypoint) if entrypoint else '',
+            privileged='-privileged' if privileged else ''
         )
 
 
