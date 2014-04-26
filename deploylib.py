@@ -256,11 +256,13 @@ class Host(object):
 
     def get_ports(self):
         portfile = path(self.state_base, '_ports_')
+        self.e(run, 'mkdir -p "{}"'.format(dirname(portfile)))
         data = self._get_file(portfile)
         return json.loads(data) if data else {}
 
     def set_ports(self, ports):
         portfile = path(self.state_base, '_ports_')
+        self.e(run, 'mkdir -p "{}"'.format(dirname(portfile)))
         state = io.BytesIO(json.dumps(ports))
         self.e(put, state, portfile)
 
