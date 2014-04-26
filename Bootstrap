@@ -12,26 +12,26 @@
 # to do and has the caching issue.
 
 coreos/etcd:
-    cmd: -name {HOST} -data-dir /data.etcd -bind-addr=0.0.0.0:{PORT}
-    volumes: {data: /data.etcd}
-    host_ports: {:4001}
+  cmd: -name {HOST} -data-dir /data.etcd -bind-addr=0.0.0.0:{PORT}
+  volumes: {data: /data.etcd}
+  host_ports: {"": 4001}
 
 
 flynn/discoverd:
-    cmd: -etcd http://{HOST}:4001
-    env:
-      EXTERNAL_IP: "{HOST}"
-    ports: {rpc: 1111}
-    host_ports: {rpc: 1111}
+  cmd: -etcd http://{HOST}:4001
+  env:
+    EXTERNAL_IP: "{HOST}"
+  ports: {rpc: 1111}
+  host_ports: {rpc: 1111}
 
 
 flynn/shelf:
-    cmd: -s /var/lib/shelf -p {PORT}
-    volumes: [/var/lib/shelf]
+  cmd: -s /var/lib/shelf -p {PORT}
+  volumes: {data: /var/lib/shelf}
 
 
 flynn/strowger:
-  cmd: -httpaddr=":{PORT_HTTP}" --httpsaddr=":{PORT_HTTPS}" --rpcaddr=":{PORT_RPC}
+  cmd: -httpaddr=":{PORT_HTTP}" --httpsaddr=":{PORT_HTTPS}" --apiaddr=":{PORT_RPC}"
   ports: [http, https, rpc]
   map_ports: {http: 80, https: 443}
 

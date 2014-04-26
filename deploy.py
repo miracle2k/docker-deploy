@@ -51,18 +51,29 @@ def main(argv):
     if args['update'] or args['create']:
         servicefile = ServiceFile.load(args['<service-file>'])
         deploy_id = args['<deploy-id>']
+
+        if args['create']:
+            result = session.post(
+                urljoin(deploy_url, '/create'),
+                data=json.dumps({'deploy_id': deploy_id})).json()
+
         result = session.post(
-            urljoin(deploy_url, '/create' if args['create'] else '/update'), data=json.dumps({
-                'deploy_id': deploy_id, 'servicefile': 'servicefile'})).json()
-        print(result)
+                urljoin(deploy_url, '/setup'),
+                data=json.dumps({'deploy_id': deploy_id,
+                                 'services': servicefile.services})).json()
 
     elif args['list']:
         result = requests.get(urljoin(deploy_url, '/list'), data={}).json()
-        print(result)
+        for instance in result:
+            print instance
+        return
 
     elif args['init']:
         result = requests.get(urljoin(deploy_url, '/init'), data={}).json()
-        print(result)
+
+    if 'error' in result:
+        print('Error: %s' % result['error'])
+        return 1
 
 
 if __name__ == '__main__':

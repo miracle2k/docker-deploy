@@ -1,11 +1,4 @@
-import contextlib
-import json
-import os
 from os.path import join as path, dirname, abspath, exists
-import random
-import tempfile
-import uuid
-import io
 import yaml
 from .utils import OrderedDictYAMLLoader
 
@@ -17,7 +10,7 @@ class Service(dict):
         if isinstance(data, basestring):
             data = {'cmd': data}
 
-        data.setdefault('volumes', [])
+        data.setdefault('volumes', {})
         data.setdefault('cmd', '')
         data.setdefault('entrypoint', '')
         data.setdefault('env', {})
@@ -71,7 +64,15 @@ class Service(dict):
 
 
 class ServiceFile(object):
-    """A file listing multiple services."""
+    """A file listing multiple services.
+
+    We enforce service discovery usage, so the order of the services
+    in the file does not matter, nor are there any other relations
+    between them.
+
+    However, the file does support global values that need to be merged
+    into the service definitions.
+    """
 
     @classmethod
     def load(cls, filename):
@@ -82,6 +83,7 @@ class ServiceFile(object):
             # template, a database might need to be initialized first
             # to setup a user account, before that user account can be
             # added to another containers environment.
+            # TODO: Do we really need this? Starting discoverd before shelf?
             opts={'Loader': OrderedDictYAMLLoader}
             structure = yaml.load(f, **opts)
 
