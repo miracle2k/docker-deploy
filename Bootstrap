@@ -11,6 +11,7 @@
 # There are only two options: DNS or host mapped ports, and DNS is harder
 # to do and has the caching issue.
 
+
 coreos/etcd:
   cmd: -name {HOST} -data-dir /data.etcd -bind-addr=0.0.0.0:{PORT}
   volumes: {data: /data.etcd}

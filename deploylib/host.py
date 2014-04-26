@@ -7,6 +7,40 @@ import uuid
 import docker
 
 
+class Service(dict):
+    """Normalize a service definition into a canonical state such that
+    we'll be able to tell whether it changed.
+    """
+
+    def __init__(self, name, data):
+        dict.__init__(self, {})
+
+        # Image can be given instead of an explicit name. The last
+        # part of the image will be used as the name only.
+        self['name'] = name
+        if not 'image' in self:
+            self['image'] = name
+            self['name'] = name.split('/')[-1]
+
+        self['cmd'] = data.pop('cmd', '')
+        self['entrypoint'] = data.pop('entrypoint', '')
+        self['env'] = data.pop('env', {})
+        self['volumes'] = data.pop('volumes', {})
+        self['host_ports'] = data.pop('host_ports', {})
+
+        ports = data.pop('ports', None)
+        if not ports:
+            # If no ports are given, always provide a default port
+            ports = {'': 'assign'}
+        if isinstance(ports, (list, tuple)):
+            # If a list of port names is given, consider them to be 'assign'
+            ports = {k: 'assign' for k in ports}
+        self['ports'] = ports
+
+        # Hide all other, non-default keys in a separate dict
+        self['kwargs'] = data
+
+
 class LocalMachineBackend(object):
     """db_dir stores runtime data like the deployments that have been setup.
 
@@ -20,12 +54,16 @@ class LocalMachineBackend(object):
         if not path.exists(volumes_dir):
             os.mkdir(volumes_dir)
 
-    def get_interface_ip(self, interface):
+    def get_host_ip(self):
         """Get IP from local interface."""
+        lan_ip = os.environ.get('HOST_IP')
+        if lan_ip:
+            return lan_ip
+
         try:
             return netifaces.ifaddresses('docker0')[netifaces.AF_INET][0]['addr']
         except ValueError:
-            return ''
+            raise RuntimeError('Cannot determine host ip, set HOST_IP environment variable')
 
     def cache(self, *names):
         """Return a cache path. Same path for same name.
@@ -95,41 +133,29 @@ class DockerHost(LocalMachineBackend):
         """Deploy a regular docker image.
         """
 
-        service_name = service['name']
-
         deployment = self.state.get('deployments', {}).get(deploy_id)
         if deployment is None:
-            raise ValueError()
+            raise ValueError('no such deployment: %s' % deploy_id)
 
         def get_free_port():
             return random.randint(10000, 65000)
 
         local_repl = {}
-        host_ip = self.get_interface_ip('docker0')
+        host_ip = self.get_host_ip()
         local_repl['HOST'] = host_ip
 
         # Construct the 'volumes' argument.
         api_volumes = {}
         for volume_name, volume_path in service.get('volumes').items():
             host_path = path.join(
-                self.volume_base, deploy_id, service_name, volume_name)
+                self.volume_base, deploy_id, service['name'], volume_name)
             api_volumes[host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
         # to determine which of them need to be mapped to the host and how.
-        #
-        # First, normalize different ways of providing the named ports
-        defined_ports = service.get('ports', None)
-        if not defined_ports:
-            # If no ports are given, always provide a default port
-            defined_ports = {'': 'assign'}
-        if isinstance(defined_ports, (list, tuple)):
-            # If a list of port names is given, consider them to be 'assign'
-            defined_ports = {k: 'assign' for k in defined_ports}
-
-        # Then, rewrite for the docker API call.
         api_ports = {}
-        defined_mappings = service.get('host_ports', {})
+        defined_ports = service['ports']
+        defined_mappings = service['host_ports']
         for port_name, container_port in defined_ports.items():
             # Ports may be defined but won't be mapped, assume this by default.
             host_port = None
@@ -157,15 +183,15 @@ class DockerHost(LocalMachineBackend):
                 local_repl[var_name] = container_port
 
         # The environment variables
-        #api_env = (service.from_file.env.get(service_name, {}) or {}).copy()
+        #api_env = (service.from_file.env.get(service['name'], {}) or {}).copy()
         api_env = {}
         api_env['DISCOVERD'] = '%s:1111' % host_ip
         api_env['ETCD'] = 'http://%s:4001' % host_ip
         api_env.update(service['env'])
 
         # Construct a name, for informative purposes only
-        container_name = namer(service) if namer else "{}-{}".format(
-            deploy_id, uuid.uuid4().hex[:5])
+        container_name = namer(service) if namer else "{}-{}-{}".format(
+            deploy_id, service['name'], uuid.uuid4().hex[:5])
 
         print "Pulling image %s" % service['image']
         print self.client.pull(service['image'])
@@ -174,15 +200,16 @@ class DockerHost(LocalMachineBackend):
         result = self.client.create_container(
             image=service['image'],
             name=container_name,
+            ports=api_ports.values(), # Be sure to expose if image doesn't already
             command=service['cmd'].format(**local_repl),
             environment=api_env,
             volumes=api_volumes,
-            entrypoint=service['entrypoint'])
+            entrypoint=service['entrypoint'].format(**local_repl))
         container_id = result['Id']
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
-        existing_id = deployment.get(service_name, {}).get('container_id', None)
+        existing_id = deployment.get(service['name'], {}).get('container_id', None)
         if existing_id:
             print "Killing existing container %s" % existing_id
             try:
@@ -191,8 +218,8 @@ class DockerHost(LocalMachineBackend):
                 pass
 
         # Then, store the new container id.
-        deployment.setdefault(service_name, {})
-        deployment[service_name]['container_id'] = container_id
+        deployment.setdefault(service['name'], {})
+        deployment[service['name']]['container_id'] = container_id
         self.state.sync()
 
         print "New container id is %s" % container_id

@@ -1,6 +1,6 @@
 import os
 from flask import Flask, Blueprint, g, jsonify, request
-from .host import DockerHost
+from .host import DockerHost, Service
 
 
 api = Blueprint('api', __name__)
@@ -52,8 +52,8 @@ def setup_services():
     if not deploy_id in g.host.get_deployments():
         return jsonify({'error':  'no such deployment, create first'})
 
-    for service in services:
-        g.host.deployment_setup_service(deploy_id, service)
+    for name, service in services.items():
+        g.host.deployment_setup_service(deploy_id, Service(name, service))
     return jsonify({'ok': True})
 
 
