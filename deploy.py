@@ -1,32 +1,7 @@
-"""
-In the future, the CLI might look something like this::
-
-    $ host Servicefile deploy myapp-production
-
-If the service exists, it will sync against YAML file changes.
-
-::
-
-    $ host Servicefile list
-
-Will list all running services.
-
-::
-
-    $ host myapp-production run rethinkdb
-
-Create a new instance of the service within the given deploy.
-
-::
-
-    $ host myapp-production restart rethinkdb
-
-Restart a given instance within the deploy.
-"""
+#!/usr/bin/env python
 
 import sys
 import os
-from os.path import join as path, dirname
 from docopt import docopt
 from urlparse import urljoin
 import json
@@ -34,46 +9,68 @@ from deploylib.service import ServiceFile
 import requests
 
 
+class Api(object):
+    """Simple interface to the deploy daemon.
+    """
+
+    def __init__(self, url):
+        self.url = url
+        self.session = requests.Session()
+        self.session.headers = {'content-type': 'application/json'}
+
+    def request(self, method, url, *args, **kwargs):
+        url = urljoin(self.url, url)
+        if 'data' in kwargs:
+            kwargs['data'] = json.dumps(kwargs['data'])
+        response = getattr(self.session, method)(url, *args, **kwargs)
+        response.raise_for_status()
+        data = response.json()
+        if 'error' in data:
+            raise RuntimeError(data['error'])
+        return data
+
+    def list(self):
+        return self.request('get', 'list')
+
+    def create(self, deploy_id):
+        return self.request('put', 'create', data={'deploy_id': deploy_id})
+
+    def setup(self, deploy_id, servicefile):
+        return self.request('post', 'setup', data={
+            'deploy_id': deploy_id,
+            'services': servicefile.services})
+
+
+
 def main(argv):
     """
     Usage:
-      deploy.py create <deploy-id> <service-file>
-      deploy.py update <deploy-id> <service-file>
+      deploy.py deploy [--create] <service-file> <deploy-id>
       deploy.py list
+      deploy.py list <deploy_id>
       deploy.py init <host>
     """
     args = docopt(main.__doc__, argv)
     deploy_url = os.environ.get('DEPLOY_URL', 'http://localhost:5000/api')
 
-    session = requests.Session()
-    session.headers = {'content-type': 'application/json'}
+    api = Api(deploy_url)
 
-    if args['update'] or args['create']:
+    if args['deploy']:
         servicefile = ServiceFile.load(args['<service-file>'])
         deploy_id = args['<deploy-id>']
 
-        if args['create']:
-            result = session.post(
-                urljoin(deploy_url, '/create'),
-                data=json.dumps({'deploy_id': deploy_id})).json()
-
-        result = session.post(
-                urljoin(deploy_url, '/setup'),
-                data=json.dumps({'deploy_id': deploy_id,
-                                 'services': servicefile.services})).json()
+        if args['--create']:
+            api.create(deploy_id)
+        api.setup(deploy_id, servicefile)
 
     elif args['list']:
-        result = requests.get(urljoin(deploy_url, '/list'), data={}).json()
-        for instance in result:
-            print instance
+        result = api.list()
+        for name, instance in result.items():
+            print '%s (%s services)' % (name, len(instance))
         return
 
     elif args['init']:
-        result = requests.get(urljoin(deploy_url, '/init'), data={}).json()
-
-    if 'error' in result:
-        print('Error: %s' % result['error'])
-        return 1
+        requests.get(urljoin(deploy_url, '/init'), data={}).json()
 
 
 if __name__ == '__main__':

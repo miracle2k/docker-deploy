@@ -28,7 +28,7 @@ def list():
     return jsonify(g.host.get_deployments())
 
 
-@api.route('/create', methods=['POST'])
+@api.route('/create', methods=['PUT'])
 def create():
     """Create a new deployment.
     """
