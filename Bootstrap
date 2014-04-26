@@ -1,28 +1,37 @@
-# This install some base images that are required on the host, notably
-# etcd and discoverd. They are special in that they provide service
-# discovery, so they can't rely on it themselves. While discoverd needs
-# etcd, the bigger challenge is that everything needs discoverd.
+# This installs some base images that are required on the host, notably
+# etcd and discoverd. Later, flynn-host bootstrapping may take care of
+# this instead.
+#
+# These services are special in that they provide service discovery itself,
+# so they can't rely on it themselves.
+#
+# While discoverd needs etcd, the bigger challenge is that everything
+# needs discoverd.
 #
 # There are only two options: DNS or host mapped ports, and DNS is harder
 # to do and has the caching issue.
 
-flynn/etcd:
-    cmd: -name {HOST} -data-dir /data.etcd -bind-addr=0.0.0.0:4001
-    volumes: [/data.etcd]
-    ports: {4001: 'host'}
+coreos/etcd:
+    cmd: -name {HOST} -data-dir /data.etcd -bind-addr=0.0.0.0:{PORT}
+    volumes: {data: /data.etcd}
+    host_ports: {:4001}
+
 
 flynn/discoverd:
-    # TODO: --link to etcd
     cmd: -etcd http://{HOST}:4001
-    ports: {1111: 'host'}
     env:
       EXTERNAL_IP: "{HOST}"
+    ports: {rpc: 1111}
+    host_ports: {rpc: 1111}
 
-elsdoerfer/shelf:
-    cmd: exec -i eth0 shelf:8888 /bin/shelf
-    entrypoint: /bin/sdutil
+
+flynn/shelf:
+    cmd: -s /var/lib/shelf -p {PORT}
     volumes: [/var/lib/shelf]
 
-elsdoerfer/strowger:
-  cmd: -httpaddr=":80" --httpsaddr=":443"
-  ports: {80: wan, 443: wan, 1115: host}
+
+flynn/strowger:
+  cmd: -httpaddr=":{PORT_HTTP}" --httpsaddr=":{PORT_HTTPS}" --rpcaddr=":{PORT_RPC}
+  ports: [http, https, rpc]
+  map_ports: {http: 80, https: 443}
+
