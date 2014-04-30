@@ -1,8 +1,9 @@
 from subprocess import check_output as run
-from . import Plugin
 import tempfile
-from deploylib.host import Service
-from deploylib.utils import directory
+
+from . import Plugin
+from deploylib.daemon.host import Service
+from deploylib.client.utils import directory
 
 
 class DataMissing(Exception):

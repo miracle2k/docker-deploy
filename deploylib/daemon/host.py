@@ -113,8 +113,8 @@ class DockerHost(LocalMachineBackend):
         self.plugins = plugins or []
 
         # TODO: Load these from somewhere and pass them in
-        from .plugins.app import AppPlugin
-        from .plugins.domains import DomainPlugin
+        from deploylib.plugins.app import AppPlugin
+        from deploylib.plugins.domains import DomainPlugin
         self.plugins = [AppPlugin(self), DomainPlugin(self)]
 
         self.client = docker.Client(

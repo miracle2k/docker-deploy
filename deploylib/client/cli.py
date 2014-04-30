@@ -2,12 +2,14 @@
 
 import sys
 import os
-from docopt import docopt
 from urlparse import urljoin
 import json
-from deploylib.plugins.app import DataMissing, LocalPlugin
-from deploylib.service import ServiceFile
+
+from docopt import docopt
 import requests
+
+from deploylib.plugins.app import LocalPlugin
+from deploylib.client.service import ServiceFile
 
 
 class Api(object):
@@ -108,5 +110,9 @@ def main(argv):
         requests.get(urljoin(deploy_url, '/init'), data={}).json()
 
 
-if __name__ == '__main__':
+def run():
     sys.exit(main(sys.argv[1:]) or None)
+
+
+if __name__ == '__main__':
+    run()
