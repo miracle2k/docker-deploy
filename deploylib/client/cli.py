@@ -19,6 +19,7 @@ class Api(object):
     def __init__(self, url):
         self.url = url
         self.session = requests.Session()
+        self.session.headers['Authorization'] = os.environ.get('AUTH')
 
     def request(self, method, url, *args, **kwargs):
         url = urljoin(self.url, url)

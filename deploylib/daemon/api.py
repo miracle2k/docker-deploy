@@ -29,6 +29,22 @@ def after_request(response):
     return response
 
 
+@api.before_request
+def check_auth():
+    is_public = getattr(app.view_functions[request.endpoint], 'is_public', False)
+    if is_public:
+        return
+
+    auth_key = g.host.state.get('auth_key')
+    if not auth_key:
+        return
+
+    if request.headers.get('Authorization') == auth_key:
+        return
+
+    return jsonify({'error': 'authorization failed.'})
+
+
 @api.route('/list')
 def list():
     """List all deployments.
@@ -121,8 +137,10 @@ app.register_blueprint(api)
 
 def run():
     if sys.argv[1:2] == ['init']:
+        auth_key = sys.argv[2]
         with app.app_context():
-            g.host = g.host = connect()
+            g.host = connect()
+            g.host.state['auth_key'] = auth_key
             g.host.create_deployment('', fail=False)
             init_host()
         return
