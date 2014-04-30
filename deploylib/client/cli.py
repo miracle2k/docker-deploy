@@ -107,7 +107,8 @@ def main(argv):
         return
 
     elif args['init']:
-        requests.get(urljoin(deploy_url, '/init'), data={}).json()
+        # Connect to the host via SSH, install this package.
+        raise NotImplementedError()
 
 
 def run():

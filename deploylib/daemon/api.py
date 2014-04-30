@@ -1,6 +1,9 @@
 import json
 import os
+from os.path import join as path, dirname
 from flask import Flask, Blueprint, g, jsonify, request
+import sys
+from deploylib.client.service import ServiceFile
 from deploylib.plugins.app import DataMissing
 from .host import DockerHost, Service
 
@@ -8,14 +11,17 @@ from .host import DockerHost, Service
 api = Blueprint('api', __name__)
 
 
-@api.before_request
-def before_request():
-    g.host = DockerHost(
+def connect():
+    return DockerHost(
         docker_url='tcp://localhost:4243', #os.environ.get('DOCKER_HOST', None),
         volumes_dir=os.environ.get('DEPLOY_DATA', '/srv/vdata'),
         db_dir=os.environ.get('DEPLOY_STATE', '/srv/vstate')
-
     )
+
+
+@api.before_request
+def before_request():
+    g.host = connect()
 
 @api.after_request
 def after_request(response):
@@ -92,11 +98,20 @@ def upload():
     return jsonify({'ok': True})
 
 
-#def init():
-#    servicefile = ServiceFile.load(path(dirname(__file__), 'Bootstrap'))
-#    host = Host(args['<host>'])
-#    namer = lambda s: s.name   # Use literal names so we can find them
-#    host.deploy_servicefile('_sys_', servicefile, namer=namer)
+def init_host():
+    """
+    Initialize the host. Will make sure core services such as etcd
+    and discoverd are running as they should.
+    """
+    servicefile = ServiceFile.load(path(dirname(__file__), 'Bootstrap'), ordered=True)
+
+    def namer(service):
+        # Give the bootstrap services simple accessible names, without
+        # attaching ids, deployment id etc. "etcd" vs "sys-etcd-fe438e".
+        return service.name
+    for name, service in servicefile.services.items():
+        g.host.deployment_setup_service(
+            '', Service(name, service), namer=namer, force=True)
 
 
 app = Flask(__name__)
@@ -105,6 +120,12 @@ app.register_blueprint(api)
 
 
 def run():
+    if sys.argv[1:2] == ['init']:
+        with app.app_context():
+            g.host = g.host = connect()
+            g.host.create_deployment('', fail=False)
+            init_host()
+        return
     app.run()
 
 

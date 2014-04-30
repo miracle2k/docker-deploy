@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from os.path import join as path, dirname, normpath
 import yaml
 from .utils import OrderedDictYAMLLoader
@@ -24,7 +25,7 @@ class ServiceFile(object):
     """
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filename, ordered=False):
         with open(filename, 'r') as f:
             # Services should generally not depend on a specific order,
             # instead rely on service discovery.
@@ -32,14 +33,18 @@ class ServiceFile(object):
             # template, a database might need to be initialized first
             # to setup a user account, before that user account can be
             # added to another containers environment.
-            # TODO: Do we really need this? Starting discoverd before shelf?
-            opts={'Loader': OrderedDictYAMLLoader}
+            # Further, for the Bootstrap file, we also need to make
+            # sure etcd starts before discoverd before shelf.
+            if ordered:
+                opts = {'Loader': OrderedDictYAMLLoader}
+            else:
+                opts = {}
             structure = yaml.load(f, **opts)
 
         # All keys in the template fall in one of two categories:
         # A container to run, or an arbitrary section of global data.
         global_data = {}
-        services = {}
+        services = OrderedDict()
 
         for name, item in structure.items():
             # Uppercase idents are non-service types

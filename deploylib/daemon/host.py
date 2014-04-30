@@ -84,12 +84,14 @@ class LocalMachineBackend(object):
         """
         return self.state.get('deployments', {})
 
-    def create_deployment(self, deploy_id):
+    def create_deployment(self, deploy_id, fail=True):
         """Create a new instance.
         """
         self.state.setdefault('deployments', {})
         if deploy_id in self.state['deployments']:
-            raise ValueError('Instance %s already exists.' % deploy_id)
+            if fail:
+                raise ValueError('Instance %s already exists.' % deploy_id)
+            return False
         self.state['deployments'][deploy_id] = {}
         self.state.sync()
 
@@ -129,17 +131,18 @@ class DockerHost(LocalMachineBackend):
         else:
             return False
 
-    def deployment_setup_service(self, deploy_id, service, **kwargs):
+    def deployment_setup_service(self, deploy_id, service, force=False, **kwargs):
         """Add a service to the deployment.
         """
 
         # Save the service definition somewhere
         deployment = self.state.get('deployments', {}).get(deploy_id)
         deployment.setdefault(service.name, {})
-        old_definition = deployment[service.name].get('definition')
-        if old_definition == service:
-            print "%s has not changed, skipping" % service.name
-            return
+        if not force:
+            old_definition = deployment[service.name].get('definition')
+            if old_definition == service:
+                print "%s has not changed, skipping" % service.name
+                return
         deployment[service.name]['definition'] = service
         self.state.sync()
 
