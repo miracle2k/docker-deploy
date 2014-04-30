@@ -5,6 +5,7 @@ import os
 from docopt import docopt
 from urlparse import urljoin
 import json
+from deploylib.plugins.app import DataMissing, LocalPlugin
 from deploylib.service import ServiceFile
 import requests
 
@@ -16,12 +17,13 @@ class Api(object):
     def __init__(self, url):
         self.url = url
         self.session = requests.Session()
-        self.session.headers = {'content-type': 'application/json'}
 
     def request(self, method, url, *args, **kwargs):
         url = urljoin(self.url, url)
-        if 'data' in kwargs:
-            kwargs['data'] = json.dumps(kwargs['data'])
+        if 'json' in kwargs:
+            kwargs['data'] = json.dumps(kwargs.pop('json'))
+            kwargs.setdefault('headers', {})
+            kwargs['headers'].update({'content-type': 'application/json'})
         response = getattr(self.session, method)(url, *args, **kwargs)
         response.raise_for_status()
         data = response.json()
@@ -33,13 +35,34 @@ class Api(object):
         return self.request('get', 'list')
 
     def create(self, deploy_id):
-        return self.request('put', 'create', data={'deploy_id': deploy_id})
+        return self.request('put', 'create', json={'deploy_id': deploy_id})
 
     def setup(self, deploy_id, servicefile):
-        return self.request('post', 'setup', data={
+        return self.request('post', 'setup', json={
             'deploy_id': deploy_id,
             'services': servicefile.services})
 
+    def upload(self, deploy_id, service_name, files, data=None):
+        return self.request('post', 'upload', files=files, data={
+            'deploy_id': deploy_id,
+            'service_name': service_name,
+            'data': json.dumps(data)})
+
+
+PLUGINS = [
+    LocalPlugin()
+]
+
+def run_plugins(method_name, *args, **kwargs):
+    for plugin in PLUGINS:
+        method = getattr(plugin, method_name, None)
+        if not method:
+            continue
+        result = method(*args, **kwargs)
+        if not result is False:
+            return result
+    else:
+        return False
 
 
 def main(argv):
@@ -61,7 +84,19 @@ def main(argv):
 
         if args['--create']:
             api.create(deploy_id)
-        api.setup(deploy_id, servicefile)
+
+        result = api.setup(deploy_id, servicefile)
+        for warning in result.get('warnings', []):
+            if warning['type'] != 'data-missing':
+                raise RuntimeError(warning['type'])
+
+            filedata = run_plugins(
+                'provide_data', servicefile.services[warning['service_name']],
+                warning['tag'])
+            files = {k: open(v[0], 'rb') for k, v in filedata.items()}
+            data = {k: v[1] for k, v in filedata.items()}
+            api.upload(deploy_id, warning['service_name'], data=data, files=files)
+
 
     elif args['list']:
         result = api.list()

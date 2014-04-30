@@ -1,5 +1,15 @@
+from os.path import join as path, dirname, normpath
 import yaml
 from .utils import OrderedDictYAMLLoader
+
+
+class Service(dict):
+    """Local service representation. Knows the location of the file the
+    definition was read from.
+    """
+    filename = None
+    def path(self, rel):
+        return normpath(path(dirname(self.filename), rel))
 
 
 class ServiceFile(object):
@@ -37,9 +47,8 @@ class ServiceFile(object):
                 global_data.update({name: item})
                 continue
             # Otherwise, it is a service
-            services[name] = item
-            # TODO: Possible attach to each service the filename so that
-            # local plugins can resolve relative paths...
+            services[name] = Service(item)
+            services[name].filename = filename
 
         # Resolve includes
         for include_path in global_data.get('Includes', []):

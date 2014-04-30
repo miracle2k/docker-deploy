@@ -1,82 +1,81 @@
+from subprocess import check_output as run
 from . import Plugin
+import tempfile
+from deploylib.host import Service
+from deploylib.utils import directory
+
+
+class DataMissing(Exception):
+    def __init__(self, service_name, tag):
+        self.service_name = service_name
+        self.tag = tag
+
+
+class LocalPlugin(object):
+    """Base interface for a plugin that runs as part of the CLI
+    on the client.
+    """
+
+    def provide_data(self, service, what):
+        """Server says it is missing data for the given service.
+
+        This should return a dict of files that will be uploaded.
+        """
+        if what != 'git':
+            return False
+
+        # The given path may be a subdirectory of a repo
+        # For git archive to work right we need the sub path relative
+        # to the repository root.
+        project_path = service.path(service['git'])
+        with directory(project_path):
+            git_root = run('git rev-parse --show-toplevel', shell=True)
+            gitsubdir = project_path[len(git_root):]
+
+        # Determine git version
+        with directory(project_path):
+            app_version = run('git rev-parse HEAD', shell=True)[:10]
+
+        # Create and push the git archive
+        with directory(project_path):
+            temp = tempfile.mktemp()
+            run('git archive HEAD:{} > {}'.format(gitsubdir, temp), shell=True)
+
+            return {
+                'app': (temp, {'version': app_version})
+            }
+
 
 
 class AppPlugin(Plugin):
     """Will run a 12-factor style app.
     """
 
-    def build(self, deploy_id, service):
-        e = self.e
-        l = lambda cmd, *a, **kw: self.e(local, cmd.format(*a, **kw), capture=True)
+    def setup(self, deploy_id, service):
+        """Called when the plugin is asked to see if it should deploy
+        the given service.
+        """
+        if not 'git' in service['kwargs']:
+            return False
 
-        # Detect the shelve service first
-        shelf_ip = self.host.discover('shelf')
+        # Check we have a release to deploy, otherwise ask the client to
+        # upload one now.
+        sinfo = self.host.state['deployments'][deploy_id][service.name]
+        slug_name = sinfo.get('app', {}).get('url')
+        if not slug_name:
+            raise DataMissing(service.name, 'git')
 
-        # The given path may be a subdirectory of a repo
-        # For git archive to work right we need the sub path relative
-        # to the repository root.
-        project_path = service.path(service.git)
-        with directory(project_path):
-            git_root = l('git rev-parse --show-toplevel')
-            gitsubdir = project_path[len(git_root):]
+        slug_url = self._get_slug_url(deploy_id, service.name, slug_name)
+        self.deploy_slugrunner(deploy_id, service, slug_url)
+        return True
 
-        # Determine git version
-        with directory(project_path):
-            app_version = l('git rev-parse HEAD')[:10]
+    def deploy_slugrunner(self, deploy_id, service, slug_url):
+        """Run the given slug.
+        """
 
-        release_id = "{}/{}:{}".format(deploy_id, service.name, app_version)
-        slug_url = 'http://{}{}'.format(shelf_ip, '/slugs/{}'.format(release_id))
+        env = self._build_env(deploy_id, service, slug_url)
 
-        # Check if the file exists already
-        statuscode = e(run, "curl -s -o /dev/null -w '%{http_code}' --head " + slug_url)
-        if statuscode == '200':
-            return slug_url
-
-        # Create and push the git archive
-        remote_temp = '/tmp/{}'.format(uuid.uuid4().hex)
-        with directory(project_path):
-            temp = tempfile.mktemp()
-            l('git archive HEAD:{} > {}', gitsubdir, temp)
-            e(put, temp, remote_temp)
-            l('rm {}', temp)
-
-        # Build into a slug
-        # Note: buildstep would give us a real exclusive image, rather than a
-        # container that presumably needs to unpack the slug every time. Maybe
-        # we could also commit the slugrunner container after the first run?
-        cache_dir = self.host.cache('slugbuilder', deploy_id, service.name)
-        env = self.get_env(deploy_id, service, slug_url)
-        cmds = [
-            'mkdir -p "%s"' % cache_dir,
-            'cat {} | docker run -v {cache}:/tmp/cache:rw {env} -i -a stdin -a stdout elsdoerfer/slugbuilder {outuri}'.format(
-                remote_temp, outuri=slug_url, cache=cache_dir,
-                env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()]),
-            )
-        ]
-        self.e(run, ' && '.join(cmds))
-
-        return slug_url
-
-    def get_env(self, deploy_id, service, slug_url):
-        # In addition to the service defined ENV, add some of our own.
-        # These give the container access to service discovery
-        env = {
-           'APP_ID': deploy_id,
-           'SLUG_URL': slug_url,
-           'PORT': '8000',
-           'SD_ARGS': 'exec -i eth0 {}:{}:{}'.format(deploy_id, service.name, 8000)
-        }
-        env.update(service.env)
-        return env
-
-    def deploy(self, deploy_id, service):
-        if not 'git' in service:
-            return
-
-        slug_url = self.build(deploy_id, service)
-
-        env = self.get_env(deploy_id, service, slug_url)
-
+        # Inject all required dependencies
         deps = ['-d {}:{}:{}'.format(varname, deploy_id, sname)
                 for sname, varname in service.get('expose', {}).items()]
         if deps:
@@ -85,11 +84,81 @@ class AppPlugin(Plugin):
                 cmd='sdutil %s' % env['SD_ARGS']
             )
 
-        self.host.deploy_docker_image(deploy_id, Service(service.name, {
-            'image': 'elsdoerfer/slugrunner',
-            'cmd': 'start {proc}'.format(proc=service.cmd),
-            'env': env,
-            'volumes': service.volumes,
-            'from_file': service.from_file
-        }), )
+        # Put together a rewritten service
+        service = Service(service.name, service.copy())
+        service['env'].update(env)
+        service['image'] = 'flynn/slugrunner'
+        service['cmd'] = 'start {proc}'.format(proc=service['cmd'])
+
+        self.host.deploy_docker_image(deploy_id, service)
+
+    def _get_slug_url(self, deploy_id, service_name, slug_name):
+        # Put together an full url for a slug
+        shelf_ip = self.host.discover('shelf')
+        release_id = "{}/{}:{}".format(deploy_id, service_name, slug_name)
+        slug_url = 'http://{}{}'.format(shelf_ip, '/slugs/{}'.format(release_id))
+        return slug_url
+
+    @staticmethod
+    def _build_env(deploy_id, service, slug_url):
+        # Put together some extra environment variables we know the
+        # slugrunner image expects.
+        env = {
+           'APP_ID': deploy_id,
+           'SLUG_URL': slug_url,
+           'PORT': '8000',
+           'SD_ARGS': 'exec -i eth0 -s {}:{}:{}'.format(deploy_id, service.name, 8000)
+        }
+        env.update(service['env'])
+        return env
+
+    def on_data_provided(self, deploy_id, service_name, files, data):
+        if not 'app' in files:
+            return
+
+        service = Service(service_name,
+            self.host.state['deployments'][deploy_id][service_name]['definition'])
+
+        uploaded_file = tempfile.mktemp()
+        files['app'].save(uploaded_file)
+
+        slug_url = self.build(deploy_id, service, uploaded_file, data['app']['version'])
+        self.deploy_slugrunner(deploy_id, service, slug_url)
+
+    def build(self, deploy_id, service, filename, version):
+        """Build an app using slugbuilder.
+
+        Note: buildstep would give us a real exclusive image, rather than a
+        container that presumably needs to unpack the slug every time. Maybe
+        we could also commit the slugrunner container after the first run?
+        """
+
+        # Determine the url where we'll store the slug
+        slug_name = version
+        slug_url = self._get_slug_url(deploy_id, service.name, slug_name)
+
+        # To speed up the build, use a cache
+        cache_dir = self.host.cache('slugbuilder', deploy_id, service.name)
+
+        # Run the slugbuilder
+        docker = self.host.client
+        docker.pull('flynn/slugbuilder')
+        env = self._build_env(deploy_id, service, slug_url)
+
+        # TODO: Sending data through stdin via the API isn't obvious
+        # at all, so we'll fall back on the command line here for now.
+        #container = docker.create_container(
+        #    image='flynn/slugbuilder',
+        #    stdin=filename,
+        #    command=slug_url,
+        #    environment=env,
+        #    volumes={cache_dir: '/tmp/cache:rw'})
+        result = run('cat {} | docker run -v {cache}:/tmp/cache:rw {env} -i -a stdin '
+            '-a stdout flynn/slugbuilder {outuri}'.format(
+                filename, outuri=slug_url, cache=cache_dir,
+                env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()])), shell=True)
+        container_id = result.strip()
+
+        return slug_url
+
 

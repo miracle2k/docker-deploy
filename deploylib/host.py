@@ -1,5 +1,6 @@
 import os
 from os import path
+from subprocess import check_output as run
 import random
 import shelve
 import netifaces
@@ -17,10 +18,10 @@ class Service(dict):
 
         # Image can be given instead of an explicit name. The last
         # part of the image will be used as the name only.
-        self['name'] = name
+        self.name = name
         if not 'image' in self:
             self['image'] = name
-            self['name'] = name.split('/')[-1]
+            self.name = name.split('/')[-1]
 
         self['cmd'] = data.pop('cmd', '')
         self['entrypoint'] = data.pop('entrypoint', '')
@@ -65,12 +66,19 @@ class LocalMachineBackend(object):
         except ValueError:
             raise RuntimeError('Cannot determine host ip, set HOST_IP environment variable')
 
+    def discover(self, servicename):
+        # sdutil does not support specifying a discoverd host yet, which is
+        # fine with us for now since all is running on the same host.
+        return '172.17.42.1:49272'
+        return run('DISCOVERD=:1111 sdutil services -1 {}'.format(servicename), shell=True)
+
     def cache(self, *names):
         """Return a cache path. Same path for same name.
         """
-        path = '/srv/vcache/{}'.format('/'.join(names))
-        self.e(run, 'mkdir -p "{}"'.format(path))
-        return path
+        tmpdir =  path.join(self.volume_base, '_cache', *names)
+        if not os.path.exists(tmpdir):
+            os.makedirs(tmpdir)
+        return tmpdir
 
     def get_deployments(self):
         """Return all service instances.
@@ -125,7 +133,18 @@ class DockerHost(LocalMachineBackend):
     def deployment_setup_service(self, deploy_id, service, **kwargs):
         """Add a service to the deployment.
         """
-        if not self.run_plugins('deploy', deploy_id, service):
+
+        # Save the service definition somewhere
+        deployment = self.state.get('deployments', {}).get(deploy_id)
+        deployment.setdefault(service.name, {})
+        old_definition = deployment[service.name].get('definition')
+        if old_definition == service:
+            print "%s has not changed, skipping" % service.name
+            return
+        deployment[service.name]['definition'] = service
+        self.state.sync()
+
+        if not self.run_plugins('setup', deploy_id, service):
             # If not plugin handles this, deploy as a regular docker image.
             return self.deploy_docker_image(deploy_id, service, **kwargs)
 
@@ -134,8 +153,6 @@ class DockerHost(LocalMachineBackend):
         """
 
         deployment = self.state.get('deployments', {}).get(deploy_id)
-        if deployment is None:
-            raise ValueError('no such deployment: %s' % deploy_id)
 
         def get_free_port():
             return random.randint(10000, 65000)
@@ -148,7 +165,7 @@ class DockerHost(LocalMachineBackend):
         api_volumes = {}
         for volume_name, volume_path in service.get('volumes').items():
             host_path = path.join(
-                self.volume_base, deploy_id, service['name'], volume_name)
+                self.volume_base, deploy_id, service.name, volume_name)
             api_volumes[host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
@@ -183,15 +200,15 @@ class DockerHost(LocalMachineBackend):
                 local_repl[var_name] = container_port
 
         # The environment variables
-        #api_env = (service.from_file.env.get(service['name'], {}) or {}).copy()
-        api_env = {}
+        #api_env = (service.from_file.env.get(service.name, {}) or {}).copy()
+        api_env = local_repl.copy()
         api_env['DISCOVERD'] = '%s:1111' % host_ip
         api_env['ETCD'] = 'http://%s:4001' % host_ip
         api_env.update(service['env'])
 
         # Construct a name, for informative purposes only
         container_name = namer(service) if namer else "{}-{}-{}".format(
-            deploy_id, service['name'], uuid.uuid4().hex[:5])
+            deploy_id, service.name, uuid.uuid4().hex[:5])
 
         print "Pulling image %s" % service['image']
         print self.client.pull(service['image'])
@@ -209,7 +226,7 @@ class DockerHost(LocalMachineBackend):
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
-        existing_id = deployment.get(service['name'], {}).get('container_id', None)
+        existing_id = deployment.get(service.name, {}).get('container_id', None)
         if existing_id:
             print "Killing existing container %s" % existing_id
             try:
@@ -218,8 +235,8 @@ class DockerHost(LocalMachineBackend):
                 pass
 
         # Then, store the new container id.
-        deployment.setdefault(service['name'], {})
-        deployment[service['name']]['container_id'] = container_id
+        deployment.setdefault(service.name, {})
+        deployment[service.name]['container_id'] = container_id
         self.state.sync()
 
         print "New container id is %s" % container_id

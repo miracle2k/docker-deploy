@@ -1,5 +1,7 @@
+import json
 import os
 from flask import Flask, Blueprint, g, jsonify, request
+from deploylib.plugins.app import DataMissing
 from .host import DockerHost, Service
 
 
@@ -52,8 +54,41 @@ def setup_services():
     if not deploy_id in g.host.get_deployments():
         return jsonify({'error':  'no such deployment, create first'})
 
+    warnings = []
     for name, service in services.items():
-        g.host.deployment_setup_service(deploy_id, Service(name, service))
+        try:
+            g.host.deployment_setup_service(deploy_id, Service(name, service))
+        except DataMissing, e:
+            warnings.append({
+                'type': 'data-missing',
+                'tag': e.tag,
+                'service_name': name
+            })
+
+    return jsonify({'ok': True, 'warnings': warnings})
+
+
+@api.route('/upload', methods=['POST'])
+def upload():
+    """Provide a binary file; usually an app that is supposed to be
+    deployed.
+
+    Provide multiple files via multipart-form encoding.
+
+    You also need to provide an "info" key which has to contain a JSON
+    object with the following data (the indirection is necessary because
+    of limitations of the encoding):
+
+        deploy_id
+        service_name
+        data = {fileid: {}}
+    """
+
+    deploy_id = request.values['deploy_id']
+    service = request.values['service_name']
+    data = json.loads(request.values.get('data', {}))
+
+    g.host.run_plugins('on_data_provided', deploy_id, service, request.files, data)
     return jsonify({'ok': True})
 
 

@@ -26,8 +26,8 @@ flynn/discoverd:
   host_ports: {rpc: 1111}
 
 
-flynn/shelf:
-  cmd: -s /var/lib/shelf -p {PORT}
+elsdoerfer/shelf:
+  cmd: -s /var/lib/shelf
   volumes: {data: /var/lib/shelf}
 
 
