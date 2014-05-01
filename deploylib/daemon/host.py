@@ -13,8 +13,10 @@ class Service(dict):
     we'll be able to tell whether it changed.
     """
 
-    def __init__(self, name, data):
+    def __init__(self, name, data=None):
         dict.__init__(self, {})
+
+        data = data.copy() if data else {}
 
         # Image can be given instead of an explicit name. The last
         # part of the image will be used as the name only.
@@ -22,6 +24,8 @@ class Service(dict):
         if not 'image' in self:
             self['image'] = name
             self.name = name.split('/')[-1]
+
+        self.globals = {}
 
         self['cmd'] = data.pop('cmd', '')
         self['entrypoint'] = data.pop('entrypoint', '')
@@ -41,6 +45,11 @@ class Service(dict):
         # Hide all other, non-default keys in a separate dict
         self['kwargs'] = data
 
+    def copy(self):
+        new_service = self.__class__(self.name)
+        new_service.globals = self.globals
+        return new_service
+
 
 class LocalMachineBackend(object):
     """db_dir stores runtime data like the deployments that have been setup.
@@ -49,7 +58,7 @@ class LocalMachineBackend(object):
     """
 
     def __init__(self, db_dir, volumes_dir):
-        self.volume_base = volumes_dir
+        self.volume_base = path.abspath(volumes_dir)
         self.state = shelve.open(db_dir, writeback=True)
 
         if not path.exists(volumes_dir):
@@ -137,6 +146,7 @@ class DockerHost(LocalMachineBackend):
 
         # Save the service definition somewhere
         deployment = self.state.get('deployments', {}).get(deploy_id)
+        service.globals = deployment.get('globals', {})
         deployment.setdefault(service.name, {})
         if not force:
             old_definition = deployment[service.name].get('definition')
@@ -148,7 +158,8 @@ class DockerHost(LocalMachineBackend):
 
         if not self.run_plugins('setup', deploy_id, service):
             # If not plugin handles this, deploy as a regular docker image.
-            return self.deploy_docker_image(deploy_id, service, **kwargs)
+            return self.deploy_docker_image(
+                deploy_id, service, **kwargs)
 
     def deploy_docker_image(self, deploy_id, service, namer=None):
         """Deploy a regular docker image.
@@ -202,8 +213,8 @@ class DockerHost(LocalMachineBackend):
                 local_repl[var_name] = container_port
 
         # The environment variables
-        #api_env = (service.from_file.env.get(service.name, {}) or {}).copy()
-        api_env = local_repl.copy()
+        api_env = (service.globals.get('Env', {}).get(service.name, {}) or {}).copy()
+        api_env.update(local_repl.copy())
         api_env['DISCOVERD'] = '%s:1111' % host_ip
         api_env['ETCD'] = 'http://%s:4001' % host_ip
         api_env.update(service['env'])
@@ -211,6 +222,17 @@ class DockerHost(LocalMachineBackend):
         # Construct a name, for informative purposes only
         container_name = namer(service) if namer else "{}-{}-{}".format(
             deploy_id, service.name, uuid.uuid4().hex[:5])
+
+        # If the name provided by the namer already exists, delete it
+        if namer:
+            try:
+                self.client.inspect_container(container_name)
+            except docker.APIError:
+                pass
+            else:
+                print "Removing existing container %s" % container_name
+                self.client.kill(container_name)
+                self.client.remove_container(container_name)
 
         print "Pulling image %s" % service['image']
         print self.client.pull(service['image'])

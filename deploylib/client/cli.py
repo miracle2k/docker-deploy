@@ -43,7 +43,8 @@ class Api(object):
     def setup(self, deploy_id, servicefile):
         return self.request('post', 'setup', json={
             'deploy_id': deploy_id,
-            'services': servicefile.services})
+            'services': servicefile.services,
+            'globals': servicefile.globals})
 
     def upload(self, deploy_id, service_name, files, data=None):
         return self.request('post', 'upload', files=files, data={

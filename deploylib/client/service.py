@@ -60,7 +60,7 @@ class ServiceFile(object):
             included_sf = ServiceFile.load(include_path)
 
             # Merge one level deep
-            merged_data = included_sf.data
+            merged_data = included_sf.globals
             for key, value in global_data.items():
                 if isinstance(value, dict):
                     merged_data.setdefault(key, {})
@@ -77,7 +77,7 @@ class ServiceFile(object):
 
         servicefile = cls()
         servicefile.filename = filename
-        servicefile.data = global_data
+        servicefile.globals = global_data
         servicefile.services = services
 
         return servicefile

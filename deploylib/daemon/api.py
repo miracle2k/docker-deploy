@@ -4,7 +4,7 @@ from os.path import join as path, dirname
 from flask import Flask, Blueprint, g, jsonify, request
 import sys
 from deploylib.client.service import ServiceFile
-from deploylib.plugins.app import DataMissing
+from deploylib.plugins import DataMissing
 from .host import DockerHost, Service
 
 
@@ -72,14 +72,20 @@ def setup_services():
     data = request.get_json()
     deploy_id = data['deploy_id']
     services = data['services']
+    globals = data['globals']
 
     if not deploy_id in g.host.get_deployments():
         return jsonify({'error':  'no such deployment, create first'})
 
+    deployment = g.host.state.get('deployments', deploy_id)
+    globals_changed = deployment.get('globals') != globals
+    deployment['globals'] = globals
+
     warnings = []
     for name, service in services.items():
         try:
-            g.host.deployment_setup_service(deploy_id, Service(name, service))
+            g.host.deployment_setup_service(
+                deploy_id, Service(name, service), force=globals_changed)
         except DataMissing, e:
             warnings.append({
                 'type': 'data-missing',

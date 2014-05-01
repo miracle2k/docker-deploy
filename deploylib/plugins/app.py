@@ -1,15 +1,9 @@
 from subprocess import check_output as run
 import tempfile
 
-from . import Plugin
+from . import Plugin, DataMissing
 from deploylib.daemon.host import Service
 from deploylib.client.utils import directory
-
-
-class DataMissing(Exception):
-    def __init__(self, service_name, tag):
-        self.service_name = service_name
-        self.tag = tag
 
 
 class LocalPlugin(object):
@@ -86,7 +80,7 @@ class AppPlugin(Plugin):
             )
 
         # Put together a rewritten service
-        service = Service(service.name, service.copy())
+        service = service.copy()
         service['env'].update(env)
         service['image'] = 'flynn/slugrunner'
         service['cmd'] = 'start {proc}'.format(proc=service['cmd'])
@@ -119,6 +113,7 @@ class AppPlugin(Plugin):
 
         service = Service(service_name,
             self.host.state['deployments'][deploy_id][service_name]['definition'])
+        service.globals = self.host.state['deployments'][deploy_id].get('globals')
 
         uploaded_file = tempfile.mktemp()
         files['app'].save(uploaded_file)
