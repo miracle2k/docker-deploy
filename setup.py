@@ -13,7 +13,7 @@ setup(
     author_email='michael@elsdoerfer.com',
     description=
         'work in progress docker deployment scripts',
-    namespaces=['deploylib'],
+    packages=['deploylib'],
     install_requires=[
         'docopt>=0.6.1'
     ],
