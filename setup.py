@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
 setup(
@@ -13,7 +13,7 @@ setup(
     author_email='michael@elsdoerfer.com',
     description=
         'work in progress docker deployment scripts',
-    packages=['deploylib'],
+    packages=find_packages(),
     install_requires=[
         'docopt>=0.6.1'
     ],
