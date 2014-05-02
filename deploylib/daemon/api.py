@@ -13,7 +13,7 @@ api = Blueprint('api', __name__)
 
 def connect():
     return DockerHost(
-        docker_url='tcp://localhost:4243', #os.environ.get('DOCKER_HOST', None),
+        docker_url=os.environ.get('DOCKER_HOST', None),
         volumes_dir=os.environ.get('DEPLOY_DATA', '/srv/vdata'),
         db_dir=os.environ.get('DEPLOY_STATE', '/srv/vstate')
     )
