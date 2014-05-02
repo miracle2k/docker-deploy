@@ -81,6 +81,7 @@ def setup_services():
     deployment = g.host.state.get('deployments', deploy_id)
     globals_changed = deployment.get('globals') != globals
     deployment['globals'] = globals
+    g.host.state.sync()
 
     warnings = []
     for name, service in services.items():

@@ -113,7 +113,7 @@ class AppPlugin(Plugin):
 
         service = Service(service_name,
             self.host.state['deployments'][deploy_id][service_name]['definition'])
-        service.globals = self.host.state['deployments'][deploy_id].get('globals')
+        service.globals = self.host.state['deployments'][deploy_id].get('globals', {})
 
         uploaded_file = tempfile.mktemp()
         files['app'].save(uploaded_file)
