@@ -142,15 +142,29 @@ app.register_blueprint(api)
 
 
 def run():
-    if sys.argv[1:2] == ['init']:
-        auth_key = sys.argv[2]
+    """
+    usage:
+    ./api.py init <auth-key>
+    ./api.py [<bind>]
+    """
+    import docopt
+    result = docopt.docopt(run.__doc__)
+    if result['init']:
+        auth_key = result['<auth-key>']
         with app.app_context():
             g.host = connect()
             g.host.state['auth_key'] = auth_key
             g.host.create_deployment('', fail=False)
             init_host()
         return
-    app.run()
+
+    bind_opt = (result['<bind>'] or '0.0.0.0:5555').split(':', 1)
+    if len(bind_opt) == 1:
+        host = bind_opt[0]
+        port = 5555
+    else:
+        host, port = bind_opt
+    app.run(host, int(port), use_reloader=False)
 
 
 if __name__ == '__main__':
