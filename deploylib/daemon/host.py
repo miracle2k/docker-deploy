@@ -43,10 +43,11 @@ class Service(dict):
         self['ports'] = ports
 
         # Hide all other, non-default keys in a separate dict
-        self['kwargs'] = data
+        self['kwargs'] = data.pop('kwargs', {})
+        self['kwargs'].update(data)
 
     def copy(self):
-        new_service = self.__class__(self.name)
+        new_service = self.__class__(self.name, dict.copy(self))
         new_service.globals = self.globals
         return new_service
 
