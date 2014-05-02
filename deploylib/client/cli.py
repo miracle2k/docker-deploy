@@ -79,7 +79,7 @@ def main(argv):
       deploy.py init <host>
     """
     args = docopt(main.__doc__, argv)
-    deploy_url = os.environ.get('DEPLOY_URL', 'http://localhost:5000/api')
+    deploy_url = os.environ.get('DEPLOY_URL', 'http://localhost:5555/api')
 
     api = Api(deploy_url)
 
