@@ -180,7 +180,7 @@ class DockerHost(LocalMachineBackend):
         for volume_name, volume_path in service.get('volumes').items():
             host_path = path.join(
                 self.volume_base, deploy_id or '__sys__', service.name, volume_name)
-            api_volumes[volume_path] = host_path
+            api_volumes[host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
         # to determine which of them need to be mapped to the host and how.
@@ -247,7 +247,7 @@ class DockerHost(LocalMachineBackend):
             ports=api_ports.values(), # Be sure to expose if image doesn't already
             command=service['cmd'].format(**local_repl),
             environment=api_env,
-            volumes=api_volumes,
+            volumes=api_volumes.values(),
             entrypoint=service['entrypoint'].format(**local_repl))
         container_id = result['Id']
 
