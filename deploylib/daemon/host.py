@@ -218,6 +218,8 @@ class DockerHost(LocalMachineBackend):
         api_env['DISCOVERD'] = '%s:1111' % host_ip
         api_env['ETCD'] = 'http://%s:4001' % host_ip
         api_env.update(service['env'])
+        api_env = {k: v.format(**local_repl) if isinstance(v, str) else v
+                   for k, v in api_env.items()}
 
         # Construct a name, for informative purposes only
         container_name = namer(service) if namer else "{}-{}-{}".format(
