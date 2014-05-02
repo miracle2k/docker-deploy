@@ -2,7 +2,6 @@ import json
 import os
 from os.path import join as path, dirname
 from flask import Flask, Blueprint, g, jsonify, request
-import sys
 from deploylib.client.service import ServiceFile
 from deploylib.plugins import DataMissing
 from .host import DockerHost, Service
@@ -166,7 +165,7 @@ def run():
         port = 5555
     else:
         host, port = bind_opt
-    app.run(host, int(port), use_reloader=False)
+    app.run(host, int(port), use_reloader=os.environ.get('RELOADER') == '1')
 
 
 if __name__ == '__main__':
