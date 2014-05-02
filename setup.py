@@ -14,6 +14,7 @@ setup(
     description=
         'work in progress docker deployment scripts',
     packages=find_packages(),
+    package_data={'': ['Bootstrap']},
     install_requires=[
         'docopt>=0.6.1',
         'flask>=0.10',
