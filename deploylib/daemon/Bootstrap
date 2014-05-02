@@ -34,5 +34,5 @@ elsdoerfer/shelf:
 flynn/strowger:
   cmd: -httpaddr=":{PORT_HTTP}" --httpsaddr=":{PORT_HTTPS}" --apiaddr=":{PORT_RPC}"
   ports: [http, https, rpc]
-  map_ports: {http: 80, https: 443}
+  host_ports: {http: 80, https: 443}
 
