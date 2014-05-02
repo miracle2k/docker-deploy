@@ -94,6 +94,8 @@ def setup_services():
                 'service_name': name
             })
 
+    g.host.run_plugins('post_deploy', services, globals)
+
     return jsonify({'ok': True, 'warnings': warnings})
 
 
