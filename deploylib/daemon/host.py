@@ -178,7 +178,7 @@ class DockerHost(LocalMachineBackend):
         api_volumes = {}
         for volume_name, volume_path in service.get('volumes').items():
             host_path = path.join(
-                self.volume_base, deploy_id, service.name, volume_name)
+                self.volume_base, deploy_id or '__sys__', service.name, volume_name)
             api_volumes[host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
