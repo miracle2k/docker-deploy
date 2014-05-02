@@ -214,7 +214,7 @@ class DockerHost(LocalMachineBackend):
                 local_repl[var_name] = container_port
 
         # The environment variables
-        api_env = (service.globals.get('Env', {}).get(service.name, {}) or {}).copy()
+        api_env = ((service.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
         api_env.update(local_repl.copy())
         api_env['DISCOVERD'] = '%s:1111' % host_ip
         api_env['ETCD'] = 'http://%s:4001' % host_ip
