@@ -40,11 +40,12 @@ class Api(object):
     def create(self, deploy_id):
         return self.request('put', 'create', json={'deploy_id': deploy_id})
 
-    def setup(self, deploy_id, servicefile):
+    def setup(self, deploy_id, servicefile, force=False):
         return self.request('post', 'setup', json={
             'deploy_id': deploy_id,
             'services': servicefile.services,
-            'globals': servicefile.globals})
+            'globals': servicefile.globals,
+            'force': force})
 
     def upload(self, deploy_id, service_name, files, data=None):
         return self.request('post', 'upload', files=files, data={
@@ -72,7 +73,7 @@ def run_plugins(method_name, *args, **kwargs):
 def main(argv):
     """
     Usage:
-      deploy.py deploy [--create] <service-file> <deploy-id>
+      deploy.py deploy [--create] [--force] <service-file> <deploy-id>
       deploy.py list
       deploy.py list <deploy_id>
       deploy.py init <host>
@@ -89,7 +90,8 @@ def main(argv):
         if args['--create']:
             api.create(deploy_id)
 
-        result = api.setup(deploy_id, servicefile)
+        result = api.setup(deploy_id, servicefile, force=args['--force'])
+
         for warning in result.get('warnings', []):
             if warning['type'] != 'data-missing':
                 raise RuntimeError(warning['type'])
@@ -99,7 +101,9 @@ def main(argv):
                 warning['tag'])
             files = {k: open(v[0], 'rb') for k, v in filedata.items()}
             data = {k: v[1] for k, v in filedata.items()}
-            api.upload(deploy_id, warning['service_name'], data=data, files=files)
+
+            api.upload(deploy_id, warning['service_name'],
+                       data=data, files=files)
 
 
     elif args['list']:

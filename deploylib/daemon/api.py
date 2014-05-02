@@ -73,6 +73,7 @@ def setup_services():
     deploy_id = data['deploy_id']
     services = data['services']
     globals = data['globals']
+    force = data['force']
 
     if not deploy_id in g.host.get_deployments():
         return jsonify({'error':  'no such deployment, create first'})
@@ -85,7 +86,7 @@ def setup_services():
     for name, service in services.items():
         try:
             g.host.deployment_setup_service(
-                deploy_id, Service(name, service), force=globals_changed)
+                deploy_id, Service(name, service), force=globals_changed or force)
         except DataMissing, e:
             warnings.append({
                 'type': 'data-missing',
