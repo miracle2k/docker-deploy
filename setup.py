@@ -15,7 +15,9 @@ setup(
         'work in progress docker deployment scripts',
     packages=find_packages(),
     install_requires=[
-        'docopt>=0.6.1'
+        'docopt>=0.6.1',
+        'flask>=0.10',
+        'netifaces>=0.10',
     ],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
