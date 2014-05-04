@@ -74,6 +74,7 @@ class AppPlugin(Plugin):
         service = service.copy()
         service['env'].update(env)
         service['image'] = 'flynn/slugrunner'
+        service['entrypoint'] = '/runner/init'
         service['cmd'] = ['start'] + service['cmd']
         # For compatibility with sdutil plugin - tell it where to find the binary
         service['kwargs'].setdefault('sdutil', {})
