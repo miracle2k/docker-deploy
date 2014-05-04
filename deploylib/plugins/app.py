@@ -94,9 +94,7 @@ class AppPlugin(Plugin):
         # slugrunner image expects.
         env = {
            'APP_ID': deploy_id,
-           'SLUG_URL': slug_url,
-           'PORT': '8000',
-           'SD_ARGS': 'exec -i eth0 -s {}:{}:{}'.format(deploy_id, service.name, 8000)
+           'SLUG_URL': slug_url
         }
         env.update(service['env'])
         return env
