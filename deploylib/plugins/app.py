@@ -70,20 +70,14 @@ class AppPlugin(Plugin):
 
         env = self._build_env(deploy_id, service, slug_url)
 
-        # Inject all required dependencies
-        deps = ['-d {}:{}:{}'.format(varname, deploy_id, sname)
-                for sname, varname in service.get('expose', {}).items()]
-        if deps:
-            env['SD_ARGS'] = 'expose {deps} {cmd}'.format(
-                deps=' '.join(deps),
-                cmd='sdutil %s' % env['SD_ARGS']
-            )
-
         # Put together a rewritten service
         service = service.copy()
         service['env'].update(env)
         service['image'] = 'flynn/slugrunner'
-        service['cmd'] = 'start {proc}'.format(proc=service['cmd'])
+        service['cmd'] = ['start'] + service['cmd']
+        # For compatibility with sdutil plugin - tell it where to find the binary
+        service['kwargs'].setdefault('sdutil', {})
+        service['kwargs']['sdutil']['binary'] = 'sdutil'
 
         self.host.deploy_docker_image(deploy_id, service)
 
@@ -117,6 +111,12 @@ class AppPlugin(Plugin):
 
         uploaded_file = tempfile.mktemp()
         files['app'].save(uploaded_file)
+
+        # We'll find the file the next time
+        sinfo = self.host.state['deployments'][deploy_id][service.name]
+        sinfo.setdefault('app', {})
+        sinfo['app']['url'] = data['app']['version']
+        self.host.state.sync()
 
         slug_url = self.build(deploy_id, service, uploaded_file, data['app']['version'])
         self.deploy_slugrunner(deploy_id, service, slug_url)

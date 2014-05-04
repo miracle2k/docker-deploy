@@ -1,5 +1,6 @@
 import os
 from os import path
+import shlex
 from subprocess import check_output as run
 import random
 import shelve
@@ -45,9 +46,15 @@ class Service(dict):
         self.globals = {}
 
         self['cmd'] = data.pop('cmd', '')
+        if isinstance(self['cmd'], basestring):
+            # docker-py accepts string as well and does the same split.
+            # To allow our internal code to rely on one format, we normalize
+            # to a list earlier.
+            self['cmd'] = shlex.split(self['cmd'])
         self['entrypoint'] = data.pop('entrypoint', '')
         self['env'] = data.pop('env', {})
         self['volumes'] = data.pop('volumes', {})
+        self['privileged'] = data.pop('privileged', False)
         self['host_ports'] = {
             k: normalize_port_mapping(v)
             for k, v in data.pop('host_ports', {}).items()}
@@ -145,7 +152,8 @@ class DockerHost(LocalMachineBackend):
         # TODO: Load these from somewhere and pass them in
         from deploylib.plugins.app import AppPlugin
         from deploylib.plugins.domains import DomainPlugin
-        self.plugins = [AppPlugin(self), DomainPlugin(self)]
+        from deploylib.plugins.sdutil import SdutilPlugin
+        self.plugins = [AppPlugin(self), DomainPlugin(self), SdutilPlugin(self)]
 
         self.client = docker.Client(
             base_url=docker_url, version='1.6', timeout=10)
@@ -194,18 +202,30 @@ class DockerHost(LocalMachineBackend):
         host_ip = self.get_host_ip()
         local_repl['HOST'] = host_ip
 
+        # First, we'll need to take the service and create a container
+        # start config, which means resolving various parts of the service
+        # definition to a final value.
+        startcfg = {
+            'image': service['image'],
+            'cmd': service['cmd'],
+            'entrypoint': service['entrypoint'],
+            'privileged': service['privileged'],
+            'volumes': {},
+            'ports': {},
+            'env': {}
+        }
+
         # Construct the 'volumes' argument.
-        api_volumes = {}
         for volume_name, volume_path in service.get('volumes').items():
             host_path = path.join(
                 self.volume_base, deploy_id or '__sys__', service.name, volume_name)
-            api_volumes[host_path] = volume_path
+            startcfg['volumes'][host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
         # to determine which of them need to be mapped to the host and how.
-        api_ports = {}
         defined_ports = service['ports']
         defined_mappings = service['host_ports']
+        port_assignments = {}
         for port_name, container_port in defined_ports.items():
             # Ports may be defined but won't be mapped, assume this by default.
             host_port = None
@@ -224,8 +244,11 @@ class DockerHost(LocalMachineBackend):
                 # right port for service discovery.
                 container_port = host_port[1]
 
+            port_assignments[port_name] = {
+                'host': host_port, 'container': container_port}
+
             if host_port:
-                api_ports[container_port] = host_port
+                startcfg['ports'][container_port] = host_port
 
                 # These ports can be used in the service definition, for
                 # example as part of the command line or env definition.
@@ -233,41 +256,53 @@ class DockerHost(LocalMachineBackend):
                 local_repl[var_name] = container_port
 
         # The environment variables
-        api_env = ((service.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
-        api_env.update(local_repl.copy())
-        api_env['DISCOVERD'] = '%s:1111' % host_ip
-        api_env['ETCD'] = 'http://%s:4001' % host_ip
-        api_env.update(service['env'])
-        api_env = {k: v.format(**local_repl) if isinstance(v, str) else v
-                   for k, v in api_env.items()}
+        startcfg['env'] = ((service.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
+        startcfg['env'].update(local_repl.copy())
+        startcfg['env']['DISCOVERD'] = '%s:1111' % host_ip
+        startcfg['env']['ETCD'] = 'http://%s:4001' % host_ip
+        startcfg['env'].update(service['env'])
 
         # Construct a name, for informative purposes only
-        container_name = namer(service) if namer else "{}-{}-{}".format(
+        startcfg['name'] = namer(service) if namer else "{}-{}-{}".format(
             deploy_id, service.name, uuid.uuid4().hex[:5])
+
+        # We are almost ready, let plugins do some final modifications
+        # before we are starting the container.
+        self.run_plugins('before_start', deploy_id, service, startcfg,
+                         port_assignments)
+
+        # Replace local variables in configuration
+        startcfg['cmd'] = [i.format(**local_repl) for i in startcfg['cmd']]
+        startcfg['entrypoint'] = startcfg['entrypoint'].format(**local_repl)
+        startcfg['env'] = {k: v.format(**local_repl) if isinstance(v, str) else v
+                           for k, v in startcfg['env'].items()}
 
         # If the name provided by the namer already exists, delete it
         if namer:
             try:
-                self.client.inspect_container(container_name)
+                self.client.inspect_container(startcfg['name'])
             except docker.APIError:
                 pass
             else:
-                print "Removing existing container %s" % container_name
-                self.client.kill(container_name)
-                self.client.remove_container(container_name)
+                print "Removing existing container %s" % startcfg['name']
+                self.client.kill(startcfg['name'])
+                self.client.remove_container(startcfg['name'])
 
         print "Pulling image %s" % service['image']
         print self.client.pull(service['image'])
 
-        print "Creating container %s" % container_name
+        print "Creating container %s" % startcfg['name']
         result = self.client.create_container(
-            image=service['image'],
-            name=container_name,
-            ports=api_ports.keys(), # Be sure to expose if image doesn't already
-            command=service['cmd'].format(**local_repl),
-            environment=api_env,
-            volumes=api_volumes.values(),
-            entrypoint=service['entrypoint'].format(**local_repl))
+            image=startcfg['image'],
+            name=startcfg['name'],
+            entrypoint=startcfg['entrypoint'],
+            command=startcfg['cmd'],
+            environment=startcfg['env'],
+            # Seems need to be pre-declared (or or in the image itself)
+            # or the binds won't work during start.
+            ports=startcfg['ports'].keys(),
+            volumes=startcfg['volumes'].values(),
+        )
         container_id = result['Id']
 
         # For now, all services may only run once. If there is already
@@ -292,14 +327,14 @@ class DockerHost(LocalMachineBackend):
         # We are finally ready to run the container.
 
         # Make sure the volumes exist
-        for host_path in api_volumes.keys():
+        for host_path in startcfg['volumes'].keys():
             if not path.exists(host_path):
                 os.makedirs(host_path)
 
         # Run the container
         print "Starting container %s" % container_id
         self.client.start(
-            container_name,
-            binds=api_volumes,
-            port_bindings=api_ports,
-            privileged=service.get('privileged', False))
+            startcfg['name'],
+            binds=startcfg['volumes'],
+            port_bindings=startcfg['ports'],
+            privileged=startcfg['privileged'])

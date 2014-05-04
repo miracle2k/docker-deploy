@@ -1,17 +1,56 @@
-# Wrap the command in sdutil calls if desired. This requires the
-# images to a) have /sdutil b) not rely on an entrypoint.
-if 'register' in service:
-    cmd = service.cmd
-    for port, pname in service.register.items():
-        cmd = '/sdutil exec -i eth0 {did}:{sname}:{pname}:{p} {cmd}'.format(
-            did=deploy_id, sname=service.name, pname=pname, p=port, cmd=cmd)
-    service.cmd = cmd[len('/sdutil '):]
-    service.entrypoint = '/sdutil'
-
-expose code here as well
+from deploylib.plugins import Plugin
 
 
-class InjectSdutil(Plugin):
-    def before_start(self, container, service):
-        if service.inject:
-            pass
+class SdutilPlugin(Plugin):
+    """Can wrap containers with sdutil for service discovery registration
+    and consumption.
+
+    For now, requires ``/sdutil`` binary to exist in the container.
+
+    NOTE: This does not read the entrypoint from the image, so you need
+    to re-declare the entrypoint in the service definition, or otherwise
+    things will likely not work.
+    """
+    def before_start(self, deploy_id, service, startcfg, port_assignments):
+
+        cfg = service['kwargs'].get('sdutil', {})
+        binary = cfg.get('binary', '/sdutil')
+
+        current_cmd = []
+        if startcfg['entrypoint']:
+            current_cmd.append(startcfg['entrypoint'])
+        if startcfg['cmd']:
+            current_cmd.extend(startcfg['cmd'])
+        new_cmd = current_cmd
+
+        # Do service consumption first, such that we won't be registered
+        # while still waiting for dependencies.
+        if cfg.get('expose'):
+            # simple add the expose calls
+            deps = []
+            for sname, varname in cfg['expose'].items():
+                deps.extend(['-d', '{}:{}:{}'.format(varname, deploy_id, sname)])
+
+            new_cmd = [binary, 'expose'] + deps + new_cmd
+
+        # Support registering all ports
+        if cfg.get('register'):
+            regs = []
+            for pname, map in port_assignments.items():
+                if not map['host']:
+                    continue
+                register_as = '{did}:{sname}:{pname}:{port}'.format(
+                    did=deploy_id, sname=service.name, pname=pname,
+                    port=map['host'][1])
+                regs.extend(['-s', register_as])
+
+            new_cmd = [binary, 'exec'] + regs + new_cmd
+
+            # TODO: Should we also expose ports not bound on the host by
+            # letting sdutil register with the eth0 interface ip?
+
+        # Be sure to replace both cmd and any existing entrypoint
+        if new_cmd != current_cmd:
+            startcfg['cmd'] = new_cmd[1:]
+            startcfg['entrypoint'] = new_cmd[0]
+
