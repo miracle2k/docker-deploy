@@ -39,10 +39,13 @@ class SdutilPlugin(Plugin):
             for pname, map in port_assignments.items():
                 if not map['host']:
                     continue
-                register_as = '{did}:{sname}:{pname}:{port}'.format(
-                    did=deploy_id, sname=service.name, pname=pname,
-                    port=map['host'][1])
-                regs.extend(['-s', register_as])
+                register_as = '{did}:{sname}'.format(
+                    did=deploy_id, sname=service.name)
+                if pname:
+                    # deploy:service:port or deploy:service for the
+                    # default port, indicated by an empty string.
+                    register_as = '%s:%s' % (register_as, pname)
+                regs.extend(['-s', '%s:%s' % (register_as, map['host'][1])])
 
             new_cmd = [binary, 'exec'] + regs + new_cmd
 
