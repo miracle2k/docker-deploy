@@ -61,7 +61,7 @@ class DomainPlugin(Plugin):
         strowger = StrowgerClient(api_ip)
 
         for domain, data in domains.items():
-            service_name = domain.get('http')
+            service_name = data.get('http')
             if not service_name:
                 continue
             strowger.set_http_route(domain, service_name)
