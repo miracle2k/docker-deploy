@@ -8,8 +8,9 @@ import json
 from docopt import docopt
 import requests
 
-from deploylib.plugins.app import LocalPlugin
+from deploylib.plugins.app import LocalAppPlugin
 from deploylib.client.service import ServiceFile
+from deploylib.plugins.domains import LocalDomainPlugin
 
 
 class Api(object):
@@ -55,7 +56,8 @@ class Api(object):
 
 
 PLUGINS = [
-    LocalPlugin()
+    LocalAppPlugin(),
+    LocalDomainPlugin()
 ]
 
 def run_plugins(method_name, *args, **kwargs):
@@ -84,7 +86,7 @@ def main(argv):
     api = Api(deploy_url)
 
     if args['deploy']:
-        servicefile = ServiceFile.load(args['<service-file>'])
+        servicefile = ServiceFile.load(args['<service-file>'], plugin_runner=run_plugins)
         deploy_id = args['<deploy-id>']
 
         if args['--create']:

@@ -1,12 +1,12 @@
 from subprocess import check_output as run
 import tempfile
 
-from . import Plugin, DataMissing
+from . import Plugin, LocalPlugin, DataMissing
 from deploylib.daemon.host import Service
 from deploylib.client.utils import directory
 
 
-class LocalPlugin(object):
+class LocalAppPlugin(LocalPlugin):
     """Base interface for a plugin that runs as part of the CLI
     on the client.
     """

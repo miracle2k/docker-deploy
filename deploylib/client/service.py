@@ -25,7 +25,7 @@ class ServiceFile(object):
     """
 
     @classmethod
-    def load(cls, filename, ordered=False):
+    def load(cls, filename, ordered=False, plugin_runner=None):
         with open(filename, 'r') as f:
             # Services should generally not depend on a specific order,
             # instead rely on service discovery.
@@ -45,7 +45,6 @@ class ServiceFile(object):
         # A container to run, or an arbitrary section of global data.
         global_data = {}
         services = OrderedDict()
-
         for name, item in structure.items():
             # Uppercase idents are non-service types
             if name[0].isupper():
@@ -54,6 +53,15 @@ class ServiceFile(object):
             # Otherwise, it is a service
             services[name] = Service(item)
             services[name].filename = filename
+
+        # Run plugins to post-process the loaded file. Used because
+        # for globals, this is the only place where the base filename
+        # is known such that relative paths can be resolved. The alternative
+        # would be making the merging/loading more intelligent, such that
+        # Apps: can be loaded into "smart" objects like services
+        # themselves already are.
+        if plugin_runner:
+            plugin_runner('file_loaded', services, global_data, filename=filename)
 
         # Resolve includes
         for include_path in global_data.get('Includes', []):

@@ -5,6 +5,11 @@ class DataMissing(Exception):
 
 
 class Plugin(object):
+    """Plugin that runs on the server."""
 
     def __init__(self, host):
         self.host = host
+
+
+class LocalPlugin(object):
+    """Plugin that runs on the client."""
