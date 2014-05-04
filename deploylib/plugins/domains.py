@@ -61,6 +61,9 @@ class DomainPlugin(Plugin):
         strowger = StrowgerClient(api_ip)
 
         for domain, data in domains.items():
-            strowger.set_http_route(domain, data['service-name'])
+            service_name = domain.get('http')
+            if not service_name:
+                continue
+            strowger.set_http_route(domain, service_name)
 
         # TODO: Support further plugins to configure the domain DNS
