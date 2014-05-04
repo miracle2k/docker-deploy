@@ -8,6 +8,23 @@ import uuid
 import docker
 
 
+def normalize_port_mapping(s):
+    """Given a port mapping, return a 2-tuple (ip, port).
+
+    The return value will be given to docker-py, which has it's own range
+    of supported format variations; for a missing port, we would return
+    ``(ip, '')``.
+    """
+    if isinstance(s, (tuple, list)):
+        return tuple(s)
+    if isinstance(s, int):
+        return '', s
+    if ':' in s:
+        parts = s.split(':', 1)
+        return tuple(parts)
+    return s, ''
+
+
 class Service(dict):
     """Normalize a service definition into a canonical state such that
     we'll be able to tell whether it changed.
@@ -31,7 +48,9 @@ class Service(dict):
         self['entrypoint'] = data.pop('entrypoint', '')
         self['env'] = data.pop('env', {})
         self['volumes'] = data.pop('volumes', {})
-        self['host_ports'] = data.pop('host_ports', {})
+        self['host_ports'] = {
+            k: normalize_port_mapping(v)
+            for k, v in data.pop('host_ports', {}).items()}
 
         ports = data.pop('ports', None)
         if not ports:
@@ -198,15 +217,15 @@ class DockerHost(LocalMachineBackend):
             if container_port == 'assign':
                 # If no host port was assigned, get a random one.
                 if not host_port:
-                    host_port = get_free_port()
+                    host_port = ('', get_free_port())
 
                 # Always use the same port within the container as on the
                 # host. Makes it easier for the container to register the
                 # right port for service discovery.
-                container_port = host_port
+                container_port = host_port[1]
 
             if host_port:
-                api_ports[host_port] = container_port
+                api_ports[container_port] = host_port
 
                 # These ports can be used in the service definition, for
                 # example as part of the command line or env definition.
@@ -244,7 +263,7 @@ class DockerHost(LocalMachineBackend):
         result = self.client.create_container(
             image=service['image'],
             name=container_name,
-            ports=api_ports.values(), # Be sure to expose if image doesn't already
+            ports=api_ports.keys(), # Be sure to expose if image doesn't already
             command=service['cmd'].format(**local_repl),
             environment=api_env,
             volumes=api_volumes.values(),
