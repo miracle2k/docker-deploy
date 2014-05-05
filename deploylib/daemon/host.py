@@ -199,8 +199,8 @@ class DockerHost(LocalMachineBackend):
             return random.randint(10000, 65000)
 
         local_repl = {}
-        host_ip = self.get_host_ip()
-        local_repl['HOST'] = host_ip
+        host_lan_ip = self.get_host_ip()
+        local_repl['HOST'] = host_lan_ip
 
         # First, we'll need to take the service and create a container
         # start config, which means resolving various parts of the service
@@ -248,6 +248,12 @@ class DockerHost(LocalMachineBackend):
                 'host': host_port, 'container': container_port}
 
             if host_port:
+                if not host_port[0]:
+                    # docker by default would bind to 0.0.0.0, exposing
+                    # the service to the world; we bind to the lan only
+                    # by default. user can give 0.0.0.0 if he wants to.
+                    host_port = tuple(host_lan_ip, host_port[1])
+
                 startcfg['ports'][container_port] = host_port
 
                 # These ports can be used in the service definition, for
@@ -258,8 +264,8 @@ class DockerHost(LocalMachineBackend):
         # The environment variables
         startcfg['env'] = ((service.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
         startcfg['env'].update(local_repl.copy())
-        startcfg['env']['DISCOVERD'] = '%s:1111' % host_ip
-        startcfg['env']['ETCD'] = 'http://%s:4001' % host_ip
+        startcfg['env']['DISCOVERD'] = '%s:1111' % host_lan_ip
+        startcfg['env']['ETCD'] = 'http://%s:4001' % host_lan_ip
         startcfg['env'].update(service['env'])
 
         # Construct a name, for informative purposes only
