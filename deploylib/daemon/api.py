@@ -85,8 +85,10 @@ def setup_services():
     warnings = []
     for name, service in services.items():
         try:
+            service = Service(name, service)
+            service.globals = globals
             g.host.deployment_setup_service(
-                deploy_id, Service(name, service), force=globals_changed or force)
+                deploy_id, service, force=globals_changed or force)
         except DataMissing, e:
             warnings.append({
                 'type': 'data-missing',
