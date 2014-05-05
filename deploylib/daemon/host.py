@@ -105,7 +105,8 @@ class LocalMachineBackend(object):
     def discover(self, servicename):
         # sdutil does not support specifying a discoverd host yet, which is
         # fine with us for now since all is running on the same host.
-        return run('DISCOVERD=:1111 sdutil services -1 {}'.format(servicename), shell=True).strip()
+        return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
+            self.get_host_ip(), servicename), shell=True).strip()
 
     def cache(self, *names):
         """Return a cache path. Same path for same name.
