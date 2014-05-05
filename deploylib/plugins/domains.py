@@ -27,10 +27,10 @@ class StrowgerClient:
 
     def set_http_route(self, domain, service, cert=None, key=None):
         route = {
-            'Domain': domain,
-            'Service': service,
-            'TLSCert': cert,
-            'TLSKey': key
+            'domain': domain,
+            'service': service,
+            'tls_cert': cert,
+            'tls_key': key
         }
         return self.request(
             'POST', '/routes', {'type': 'http', 'config': route})
