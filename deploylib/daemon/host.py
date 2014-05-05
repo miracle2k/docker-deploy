@@ -252,7 +252,7 @@ class DockerHost(LocalMachineBackend):
                     # docker by default would bind to 0.0.0.0, exposing
                     # the service to the world; we bind to the lan only
                     # by default. user can give 0.0.0.0 if he wants to.
-                    host_port = tuple(host_lan_ip, host_port[1])
+                    host_port = ([host_lan_ip, host_port[1]])
 
                 startcfg['ports'][container_port] = host_port
 
