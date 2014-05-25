@@ -38,10 +38,12 @@ class Service(dict):
 
         # Image can be given instead of an explicit name. The last
         # part of the image will be used as the name only.
-        self.name = name
-        if not 'image' in self:
+        if not 'image' in data:
             self['image'] = name
             self.name = name.split('/')[-1]
+        else:
+            self.name = name
+            self['image'] = data['image']
 
         self.globals = {}
 
