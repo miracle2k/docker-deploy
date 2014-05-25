@@ -4,6 +4,7 @@ import sys
 import os
 from urlparse import urljoin
 import json
+import ConfigParser
 
 from docopt import docopt
 import requests
@@ -17,10 +18,10 @@ class Api(object):
     """Simple interface to the deploy daemon.
     """
 
-    def __init__(self, url):
+    def __init__(self, url, auth):
         self.url = url
         self.session = requests.Session()
-        self.session.headers['Authorization'] = os.environ.get('AUTH')
+        self.session.headers['Authorization'] = auth
 
     def request(self, method, url, *args, **kwargs):
         url = urljoin(self.url, url)
@@ -72,6 +73,21 @@ def run_plugins(method_name, *args, **kwargs):
         return False
 
 
+class Config(ConfigParser.ConfigParser):
+
+    def __init__(self):
+        ConfigParser.ConfigParser.__init__(self)
+        self.filename = os.path.expanduser('~/.calzion')
+        self.read(self.filename)
+
+    def save(self):
+        with open(self.filename, 'w') as configfile:
+            self.write(configfile)
+
+    def __getitem__(self, item):
+        return dict(self.items(item))
+
+
 def main(argv):
     """
     Usage:
@@ -79,11 +95,26 @@ def main(argv):
       deploy.py list
       deploy.py list <deploy_id>
       deploy.py init <host>
+      deploy.py add-server <name> <url> <auth>
     """
     args = docopt(main.__doc__, argv)
-    deploy_url = os.environ.get('DEPLOY_URL', 'http://localhost:5555/api')
+    config = Config()
 
-    api = Api(deploy_url)
+    # Determine the server to interact with
+    deploy_url = 'http://localhost:5555/api'
+    auth = ''
+    # Should we use a predefined server?
+    servername = os.environ.get('SERVER')
+    if servername:
+        if not config.has_section('server "%s"' % servername):
+            raise EnvironmentError("Server %s is not configured" % servername)
+        deploy_url = config['server "%s"' % servername].get('url', deploy_url)
+        auth = config['server "%s"' % servername].get('url', auth)
+    # Explicit overrides
+    deploy_url = os.environ.get('DEPLOY_URL', deploy_url)
+    auth = os.environ.get('AUTH', auth)
+
+    api = Api(deploy_url, auth)
 
     if args['deploy']:
         servicefile = ServiceFile.load(args['<service-file>'], plugin_runner=run_plugins)
@@ -117,6 +148,12 @@ def main(argv):
     elif args['init']:
         # Connect to the host via SSH, install this package.
         raise NotImplementedError()
+
+    elif args['add-server']:
+        config.add_section('server "%s"' % args['<name>'])
+        config.set('server "%s"' % args['<name>'], 'url', args['<url>'])
+        config.set('server "%s"' % args['<name>'], 'auth', args['<auth>'])
+        config.save()
 
 
 def run():
