@@ -16,9 +16,12 @@ setup(
     packages=find_packages(),
     package_data={'': ['Bootstrap']},
     install_requires=[
+        'docker-py>=0.3.0',
         'docopt>=0.6.1',
         'flask>=0.10',
         'netifaces>=0.10',
+        'requests==2.2.1',
+        'pyyaml>=3.11'
     ],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
