@@ -83,8 +83,22 @@ def setup_services():
     deployment['globals'] = globals
     g.host.state.sync()
 
+    # Before-deploy steps
+    sort_first = g.host.run_plugins('before_deploy', deploy_id, globals, services)
+    g.host.state.sync()
+
+    # Sometimes certain one-time initialization steps require a service
+    # to be started before others.
+    sorted_services = services.items()
+    def sorter(item):
+        if not item[0] in sort_first:
+            return -1
+        return len(sort_first) - sort_first.index(item[0])
+    if sort_first:
+        sorted_services.sort(key=sorter, reverse=True)
+
     warnings = []
-    for name, service in services.items():
+    for name, service in sorted_services:
         try:
             g.host.deployment_setup_service(
                 deploy_id, Service(name, service), force=globals_changed or force)
@@ -95,7 +109,9 @@ def setup_services():
                 'service_name': name
             })
 
+    # After-deploy steps
     g.host.run_plugins('post_deploy', services, globals)
+    g.host.state.sync()
 
     return jsonify({'ok': True, 'warnings': warnings})
 

@@ -10,6 +10,11 @@ class Plugin(object):
     def __init__(self, host):
         self.host = host
 
+    def plugin_storage(self, deploy_id, plugin_name):
+        d = self.host.state['deployments'][deploy_id].setdefault('_data', {})
+        d = d.setdefault(plugin_name, {})
+        return d
+
 
 class LocalPlugin(object):
     """Plugin that runs on the client."""

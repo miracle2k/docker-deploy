@@ -154,7 +154,12 @@ class DockerHost(LocalMachineBackend):
         from deploylib.plugins.app import AppPlugin
         from deploylib.plugins.domains import DomainPlugin
         from deploylib.plugins.sdutil import SdutilPlugin
-        self.plugins = [AppPlugin(self), DomainPlugin(self), SdutilPlugin(self)]
+        from deploylib.plugins.flynn_postgres import FlynnPostgresPlugin
+        self.plugins = [
+            AppPlugin(self),
+            FlynnPostgresPlugin(self),
+            DomainPlugin(self),
+            SdutilPlugin(self)]
 
         self.client = docker.Client(
             base_url=docker_url, version='1.6', timeout=10)
@@ -164,8 +169,9 @@ class DockerHost(LocalMachineBackend):
             method = getattr(plugin, method_name, None)
             if not method:
                 continue
-            if method(*args, **kwargs):
-                return True
+            result = method(*args, **kwargs)
+            if result:
+                return result
         else:
             return False
 
@@ -187,8 +193,10 @@ class DockerHost(LocalMachineBackend):
 
         if not self.run_plugins('setup', deploy_id, service):
             # If not plugin handles this, deploy as a regular docker image.
-            return self.deploy_docker_image(
-                deploy_id, service, **kwargs)
+            self.deploy_docker_image(deploy_id, service, **kwargs)
+
+        self.run_plugins('post_service_deploy', deploy_id, service)
+        self.state.sync()
 
     def deploy_docker_image(self, deploy_id, service, namer=None):
         """Deploy a regular docker image.
@@ -202,6 +210,8 @@ class DockerHost(LocalMachineBackend):
         local_repl = {}
         host_lan_ip = self.get_host_ip()
         local_repl['HOST'] = host_lan_ip
+        local_repl['DEPLOY_ID'] = deploy_id
+        self.run_plugins('provide_local_vars', service, local_repl)
 
         # First, we'll need to take the service and create a container
         # start config, which means resolving various parts of the service
