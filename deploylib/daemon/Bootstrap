@@ -20,6 +20,7 @@ coreos/etcd:
 
 
 flynn/discoverd:
+  wait: http://{HOST}:4001
   cmd: -etcd http://{HOST}:4001
   env:
     EXTERNAL_IP: "{HOST}"
@@ -28,11 +29,13 @@ flynn/discoverd:
 
 
 elsdoerfer/shelf:
+  wait: tcp://{HOST}:1001
   cmd: -s /var/lib/shelf
   volumes: {data: /var/lib/shelf}
 
 
 flynn/strowger:
+  wait: tcp://{HOST}:1001
   cmd: -httpaddr=":{PORT_HTTP}" --httpsaddr=":{PORT_HTTPS}" --apiaddr=":{PORT_RPC}"
   ports: [http, https, rpc]
   host_ports: {http: "0.0.0.0:80", https: "0.0.0.0:443"}

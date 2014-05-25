@@ -155,7 +155,9 @@ class DockerHost(LocalMachineBackend):
         from deploylib.plugins.domains import DomainPlugin
         from deploylib.plugins.sdutil import SdutilPlugin
         from deploylib.plugins.flynn_postgres import FlynnPostgresPlugin
+        from deploylib.plugins.wait import WaitPlugin
         self.plugins = [
+            WaitPlugin(self),
             AppPlugin(self),
             FlynnPostgresPlugin(self),
             DomainPlugin(self),
