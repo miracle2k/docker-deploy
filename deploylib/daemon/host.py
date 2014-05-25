@@ -217,6 +217,11 @@ class DockerHost(LocalMachineBackend):
         local_repl['DEPLOY_ID'] = deploy_id
         self.run_plugins('provide_local_vars', service, local_repl)
 
+        def replvars(s):
+            if not isinstance(s, basestring):
+                return s
+            return s.format(**local_repl)
+
         # First, we'll need to take the service and create a container
         # start config, which means resolving various parts of the service
         # definition to a final value.
@@ -282,6 +287,8 @@ class DockerHost(LocalMachineBackend):
         startcfg['env']['DISCOVERD'] = '%s:1111' % host_lan_ip
         startcfg['env']['ETCD'] = 'http://%s:4001' % host_lan_ip
         startcfg['env'].update(service['env'])
+        startcfg['env'] = {replvars(k): replvars(v)
+                           for k, v in startcfg['env'].items()}
 
         # Construct a name, for informative purposes only
         startcfg['name'] = namer(service) if namer else "{}-{}-{}".format(
