@@ -13,7 +13,8 @@
 
 
 coreos/etcd:
-  cmd: -name {HOST} -data-dir /data.etcd -bind-addr=0.0.0.0:{PORT}
+  # It seems due to the stange way etcdctl connects, we need to set --peer-addr
+  cmd: -name {HOST} -data-dir /data.etcd -bind-addr=0.0.0.0:{PORT} --peer-addr={HOST}:7001
   volumes: {data: /data.etcd}
   host_ports: {"": 4001}
 
