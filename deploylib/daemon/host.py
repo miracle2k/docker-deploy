@@ -339,7 +339,7 @@ class DockerHost(LocalMachineBackend):
         if existing_id:
             print "Killing existing container %s" % existing_id
             try:
-                self.client.kill(existing_id)
+                self.client.stop(existing_id, 10)
             except:
                 pass
 
