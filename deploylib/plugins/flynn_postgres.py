@@ -120,6 +120,10 @@ class FlynnPostgresPlugin(Plugin):
         # For now, only support one standard database
         id = ''
 
+        # Has this database already been setup? We don't need to anything
+        if id in data:
+            return
+
         # If this is not the postgres-flynn API service, ignore
         if not service.name == service.globals['Flynn-Postgres']['in']:
             return
@@ -132,15 +136,21 @@ class FlynnPostgresPlugin(Plugin):
         while time.time() - start < 40:
             try:
                 httpurl = 'http://%s/databases' % self.host.discover(sname)
-                break
             except (CalledProcessError, ConnectionError):
                 time.sleep(1)
+                continue
+
+            try:
+                created = requests.post(httpurl).json()
+            except (ConnectionError):
+                time.sleep(1)
+            else:
+                data[id] = {}
+                data[id]['dbname'] = created['env']['PGDATABASE']
+                data[id]['user'] = created['env']['PGUSER']
+                data[id]['password'] = created['env']['PGPASSWORD']
+
         else:
             raise EnvironmentError("Cannot find flynn-postgres API: %s" % sname)
 
-        created = requests.post(httpurl).json()
-        data[id] = {}
-        data[id]['dbname'] = created['env']['PGDATABASE']
-        data[id]['user'] = created['env']['PGUSER']
-        data[id]['password'] = created['env']['PGPASSWORD']
 
