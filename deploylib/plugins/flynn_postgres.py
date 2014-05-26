@@ -62,7 +62,10 @@ containers depend on it. An dict structure can be used for multiple
 databases. The key is used to allow renaming the ``expose_as`` option
 w/o triggering a new setup.
 """
+
+from subprocess import CalledProcessError
 import time
+from botocore.vendored.requests import ConnectionError
 import requests
 
 from deploylib.plugins import Plugin
@@ -119,11 +122,18 @@ class FlynnPostgresPlugin(Plugin):
             return
 
         # It is the pg-api service, create the database
-        time.sleep(2)
-
-        sname = '%s-api' % (service['env']['PGSERVICE'])
+        sname = '%s-api' % (service['env']['FLYNN_POSTGRES'])
         sname = sname.format(DEPLOY_ID=deploy_id)
-        httpurl = 'http://%s/databases' % self.host.discover(sname)
+
+        start = time.time()
+        while time.time() - start < 40:
+            try:
+                httpurl = 'http://%s/databases' % self.host.discover(sname)
+                break
+            except (CalledProcessError, ConnectionError):
+                time.sleep(1)
+        else:
+            raise EnvironmentError("Cannot find flynn-postgres API: %s" % sname)
 
         created = requests.post(httpurl).json()
         data['dbname'] = created['env']['PGDATABASE']
