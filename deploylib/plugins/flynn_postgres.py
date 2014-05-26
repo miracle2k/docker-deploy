@@ -81,6 +81,13 @@ class FlynnPostgresPlugin(Plugin):
             '%s%s' % (expose_as, 'DATABASE'): dbname,
         }
 
+    def provide_environment(self, deploy_id, service, env):
+        data = self.plugin_storage(deploy_id, 'flynn_postgres')
+        # For now, only support one standard database
+        id = ''
+        if id in data:
+            env.update(self._make_env(data.get('expose_as'), **data[id]))
+
     def before_deploy(self, deploy_id, globals, services):
         """Before any service is deployed within a deployment.
         """
@@ -113,10 +120,6 @@ class FlynnPostgresPlugin(Plugin):
         # For now, only support one standard database
         id = ''
 
-        # If we have our data already, provide it
-        if id in data:
-            return self._make_env(data.get('expose_as'), **data[id])
-
         # If this is not the postgres-flynn API service, ignore
         if not service.name == service.globals['Flynn-Postgres']['in']:
             return
@@ -136,7 +139,8 @@ class FlynnPostgresPlugin(Plugin):
             raise EnvironmentError("Cannot find flynn-postgres API: %s" % sname)
 
         created = requests.post(httpurl).json()
-        data['dbname'] = created['env']['PGDATABASE']
-        data['user'] = created['env']['PGUSER']
-        data['password'] = created['env']['PGPASSWORD']
+        data[id] = {}
+        data[id]['dbname'] = created['env']['PGDATABASE']
+        data[id]['user'] = created['env']['PGUSER']
+        data[id]['password'] = created['env']['PGPASSWORD']
 

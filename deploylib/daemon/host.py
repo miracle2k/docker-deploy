@@ -289,6 +289,7 @@ class DockerHost(LocalMachineBackend):
         startcfg['env'].update(service['env'])
         startcfg['env'] = {replvars(k): replvars(v)
                            for k, v in startcfg['env'].items()}
+        self.run_plugins('provide_environment', deploy_id, service, startcfg['env'])
 
         # Construct a name, for informative purposes only
         startcfg['name'] = namer(service) if namer else "{}-{}-{}".format(
