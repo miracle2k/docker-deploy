@@ -109,7 +109,7 @@ def main(argv):
         if not config.has_section('server "%s"' % servername):
             raise EnvironmentError("Server %s is not configured" % servername)
         deploy_url = config['server "%s"' % servername].get('url', deploy_url)
-        auth = config['server "%s"' % servername].get('url', auth)
+        auth = config['server "%s"' % servername].get('auth', auth)
     # Explicit overrides
     deploy_url = os.environ.get('DEPLOY_URL', deploy_url)
     auth = os.environ.get('AUTH', auth)
