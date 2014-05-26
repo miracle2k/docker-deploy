@@ -65,7 +65,7 @@ w/o triggering a new setup.
 
 from subprocess import CalledProcessError
 import time
-from botocore.vendored.requests import ConnectionError
+from requests import ConnectionError
 import requests
 
 from deploylib.plugins import Plugin
