@@ -143,6 +143,10 @@ def main(argv):
         result = api.list()
         for name, instance in result.items():
             print '%s (%s services)' % (name, len(instance))
+            for service, data in instance.items():
+                print('  %s (%s versions)' % (service, data['versions']))
+                for i in data['instances']:
+                    print('    %s' % i)
         return
 
     elif args['init']:
