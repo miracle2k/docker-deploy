@@ -1,3 +1,4 @@
+import os
 from subprocess import check_output as run
 import tempfile
 
@@ -155,9 +156,11 @@ class AppPlugin(Plugin):
         #    command=slug_url,
         #    environment=env,
         #    volumes={cache_dir: '/tmp/cache:rw'})
-        result = run('cat {} | docker run -v {cache}:/tmp/cache:rw {env} -i -a stdin '
-            '-a stdout flynn/slugbuilder {outuri}'.format(
+        builder_image = os.environ.get('SLUGBUILDER', 'flynn/slugbuilder')
+        result = run('cat {} | docker run -u root -v {cache}:/tmp/cache:rw {env} -i -a stdin '
+            '-a stdout {image} {outuri}'.format(
                 filename, outuri=slug_url, cache=cache_dir,
+                image=builder_image,
                 env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()])), shell=True)
         container_id = result.strip()
 
