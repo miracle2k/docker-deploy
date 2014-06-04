@@ -33,7 +33,7 @@ class StrowgerClient:
             'tls_key': key
         }
         return self.request(
-            'POST', '/routes', {'type': 'http', 'config': route})
+            'PUT', '/routes', {'type': 'http', 'config': route})
 
 
 class LocalDomainPlugin(LocalPlugin):
