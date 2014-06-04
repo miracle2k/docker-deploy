@@ -5,7 +5,7 @@ from flask import Flask, Blueprint, g, jsonify, request
 import transaction
 from deploylib.client.service import ServiceFile
 from deploylib.plugins import DataMissing
-from .host import DockerHost, Service, DeployError
+from .host import DockerHost, ServiceDef, DeployError
 
 
 api = Blueprint('api', __name__)
@@ -111,7 +111,7 @@ def setup_services():
         for name, service in sorted_services:
             try:
                 g.host.deployment_setup_service(
-                    deploy_id, Service(name, service), force=globals_changed or force)
+                    deploy_id, ServiceDef(name, service), force=globals_changed or force)
             except DataMissing, e:
                 warnings.append({
                     'type': 'data-missing',
@@ -165,7 +165,7 @@ def init_host():
         return service.name
     for name, service in servicefile.services.items():
         g.host.deployment_setup_service(
-            '', Service(name, service), namer=namer, force=True)
+            '', ServiceDef(name, service), namer=namer, force=True)
 
 
 app = Flask(__name__)

@@ -3,7 +3,7 @@ from subprocess import check_output as run
 import tempfile
 
 from . import Plugin, LocalPlugin, DataMissing
-from deploylib.daemon.host import Service
+from deploylib.daemon.host import ServiceDef
 from deploylib.client.utils import directory
 
 
@@ -112,7 +112,7 @@ class AppPlugin(Plugin):
 
         deployment = self.host.db.deployments[deploy_id]
 
-        service = Service(service_name,
+        service = ServiceDef(service_name,
             deployment.services[service_name]._definition)
         service.globals = deployment.globals
 

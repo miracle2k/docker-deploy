@@ -1,3 +1,4 @@
+import copy
 import os
 from os import path
 import shlex
@@ -36,7 +37,7 @@ def normalize_port_mapping(s):
     return s, ''
 
 
-class Service(dict):
+class ServiceDef(dict):
     """Normalize a service definition into a canonical state such that
     we'll be able to tell whether it changed.
     """
@@ -89,11 +90,14 @@ class Service(dict):
         new_service.globals = self.globals
         return new_service
 
+    def __copy__(self):
+        return copy.deepcopy(self)
 
-class LocalMachineBackend(object):
-    """db_dir stores runtime data like the deployments that have been setup.
 
-    volumes_dir contains the data volumes used by containers.
+class LocalMachineImplementation(object):
+    """The DockerHost class is currently split in two, with the features
+    that depend on the local filesystem in one class and the features that
+    use the Docker API via TCP in another.
     """
 
     def __init__(self, db_dir, volumes_dir):
@@ -155,17 +159,15 @@ class LocalMachineBackend(object):
         raise NotImplementedError()
 
 
-class DockerHost(LocalMachineBackend):
-    """Runs service files on a docker host via the API.
+class DockerHost(LocalMachineImplementation):
+    """This is our high-level internal API.
 
-    We could also:
-        - Create initd files
-        - Create CoreOS fleet files
-        - Send to flynn-host
+    It is what the outward-facing HTTP API uses to do its job. You can
+    tell it to deploy a service.
     """
 
     def __init__(self, docker_url=None, plugins=None, **kwargs):
-        LocalMachineBackend.__init__(self, **kwargs)
+        LocalMachineImplementation.__init__(self, **kwargs)
 
         self.plugins = plugins or []
 
