@@ -34,7 +34,7 @@ elsdoerfer/shelf:
   volumes: {data: /var/lib/shelf}
 
 
-flynn/strowger:
+elsdoerfer/strowger:
   wait: tcp://{HOST}:1001
   cmd: -httpaddr=":{PORT_HTTP}" --httpsaddr=":{PORT_HTTPS}" --apiaddr=":{PORT_RPC}"
   ports: [http, https, rpc]
