@@ -41,7 +41,6 @@ class LocalAppPlugin(LocalPlugin):
             }
 
 
-
 class AppPlugin(Plugin):
     """Will run a 12-factor style app.
     """
@@ -53,14 +52,17 @@ class AppPlugin(Plugin):
         if not 'git' in service['kwargs']:
             return False
 
-        # Check we have a release to deploy, otherwise ask the client to
-        # upload one now.
-        sinfo = self.host.state['deployments'][deploy_id][service.name]
-        slug_name = sinfo.get('app', {}).get('url')
-        if not slug_name:
+        # Take the slug that we have already built, from the last deployed
+        # version of the service (deployed  via this upload, or by git push).
+        # If there is no such slug, that means this is a new service, and
+        # we need to ask the client to provide the code.
+        sinfo = self.host.db.deployments[deploy_id].services[service.name]
+        if not sinfo.latest or not getattr(sinfo.latest, 'app_version_id', None):
+            sinfo._definition = service
             raise DataMissing(service.name, 'git')
 
-        slug_url = self._get_slug_url(deploy_id, service.name, slug_name)
+        slug_url = self._get_slug_url(
+            deploy_id, service.name, sinfo.latest.app_version_id)
         self.deploy_slugrunner(deploy_id, service, slug_url)
         return True
 
@@ -101,23 +103,28 @@ class AppPlugin(Plugin):
         return env
 
     def on_data_provided(self, deploy_id, service_name, files, data):
+        """Data that this plugin has requested from the client
+        has been provided.
+        """
         if not 'app' in files:
             return
 
-        service = Service(service_name,
-            self.host.state['deployments'][deploy_id][service_name]['definition'])
-        service.globals = self.host.state['deployments'][deploy_id].get('globals', {})
+        deployment = self.host.db.deployments[deploy_id]
 
+        service = Service(service_name,
+            deployment.services[service_name]._definition)
+        service.globals = deployment.globals
+
+        # Built into a slug
         uploaded_file = tempfile.mktemp()
         files['app'].save(uploaded_file)
-
-        # We'll find the file the next time
-        sinfo = self.host.state['deployments'][deploy_id][service.name]
-        sinfo.setdefault('app', {})
-        sinfo['app']['url'] = data['app']['version']
-        self.host.state.sync()
-
         slug_url = self.build(deploy_id, service, uploaded_file, data['app']['version'])
+
+        # Create a new version of the service
+        version = deployment.services[service_name].append_version(service)
+        version.app_version_id = data['app']['version']
+
+        # Run this new version
         self.deploy_slugrunner(deploy_id, service, slug_url)
 
     def build(self, deploy_id, service, filename, version):

@@ -1,12 +1,22 @@
 import os
 from os import path
 import shlex
-from subprocess import check_output as run
+from subprocess import check_output as run, CalledProcessError
 import random
-import shelve
 import netifaces
 import uuid
 import docker
+import ZODB
+import ZODB.FileStorage
+from deploylib.daemon.db import DeployDB, Deployment
+
+
+class DeployError(Exception):
+    """Unrecoverable error that causes the deploy process to abort.
+
+    As deploys are not atomic, this can leave the deploy in an
+    in-between state.
+    """
 
 
 def normalize_port_mapping(s):
@@ -88,10 +98,21 @@ class LocalMachineBackend(object):
 
     def __init__(self, db_dir, volumes_dir):
         self.volume_base = path.abspath(volumes_dir)
-        self.state = shelve.open(db_dir, writeback=True)
+
+        self._zodb_storage = ZODB.FileStorage.FileStorage(db_dir)
+        self._zodb_obj = ZODB.DB(self._zodb_storage)
+        self._zodb_connection = self._zodb_obj.open()
+        if not getattr(self._zodb_connection.root, 'deploy', None):
+            self._zodb_connection.root.deploy = DeployDB()
+        self.db = self._zodb_connection.root.deploy
 
         if not path.exists(volumes_dir):
             os.mkdir(volumes_dir)
+
+    def close(self):
+        self._zodb_connection.close()
+        self._zodb_obj.close()
+        self._zodb_storage.close()
 
     def get_host_ip(self):
         """Get IP from local interface."""
@@ -107,8 +128,11 @@ class LocalMachineBackend(object):
     def discover(self, servicename):
         # sdutil does not support specifying a discoverd host yet, which is
         # fine with us for now since all is running on the same host.
-        return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
-            self.get_host_ip(), servicename), shell=True).strip()
+        try:
+            return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
+                self.get_host_ip(), servicename), shell=True).strip()
+        except CalledProcessError as e:
+            raise DeployError(e)
 
     def cache(self, *names):
         """Return a cache path. Same path for same name.
@@ -118,21 +142,14 @@ class LocalMachineBackend(object):
             os.makedirs(tmpdir)
         return tmpdir
 
-    def get_deployments(self):
-        """Return all service instances.
-        """
-        return self.state.get('deployments', {})
-
     def create_deployment(self, deploy_id, fail=True):
         """Create a new instance.
         """
-        self.state.setdefault('deployments', {})
-        if deploy_id in self.state['deployments']:
+        if deploy_id in self.db.deployments:
             if fail:
                 raise ValueError('Instance %s already exists.' % deploy_id)
             return False
-        self.state['deployments'][deploy_id] = {}
-        self.state.sync()
+        self.db.deployments[deploy_id] = Deployment()
 
     def deployment_setup_service(self, deploy_id, service):
         raise NotImplementedError()
@@ -183,30 +200,34 @@ class DockerHost(LocalMachineBackend):
         """Add a service to the deployment.
         """
 
-        # Save the service definition somewhere
-        deployment = self.state.get('deployments', {}).get(deploy_id)
-        service.globals = deployment.get('globals', {})
-        deployment.setdefault(service.name, {})
-        if not force:
-            old_definition = deployment[service.name].get('definition')
-            if old_definition == service:
+        deployment = self.db.deployments[deploy_id]
+        exists = service.name in deployment.services
+
+        # If the service is not changed, we can skip it
+        if exists and not force:
+            latest = deployment.services[service.name].latest
+            if latest and latest.definition == service:
                 print "%s has not changed, skipping" % service.name
                 return
-        deployment[service.name]['definition'] = service
-        self.state.sync()
 
+        service.globals = deployment.globals
+
+        # Store the new service definition in the database
+        deployment.set_service(service.name)
+
+        # See if a plugin will handle this.
         if not self.run_plugins('setup', deploy_id, service):
             # If not plugin handles this, deploy as a regular docker image.
             self.deploy_docker_image(deploy_id, service, **kwargs)
+            deployment.services[service.name].append_version(service)
 
         self.run_plugins('post_service_deploy', deploy_id, service)
-        self.state.sync()
 
     def deploy_docker_image(self, deploy_id, service, namer=None):
         """Deploy a regular docker image.
         """
 
-        deployment = self.state.get('deployments', {}).get(deploy_id)
+        deployment = self.db.deployments[deploy_id]
 
         def get_free_port():
             return random.randint(10000, 65000)
@@ -336,18 +357,16 @@ class DockerHost(LocalMachineBackend):
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
-        existing_id = deployment.get(service.name, {}).get('container_id', None)
-        if existing_id:
-            print "Killing existing container %s" % existing_id
+        for inst in deployment.services[service.name].instances:
+            print "Killing existing container %s" % inst.container_id
             try:
-                self.client.stop(existing_id, 10)
+                self.client.stop(inst.container_id, 10)
             except:
                 pass
+            deployment.services[service.name].instances.remove(inst)
 
         # Then, store the new container id.
-        deployment.setdefault(service.name, {})
-        deployment[service.name]['container_id'] = container_id
-        self.state.sync()
+        deployment.services[service.name].append_instance(container_id)
 
         print "New container id is %s" % container_id
 

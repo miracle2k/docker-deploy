@@ -2,9 +2,10 @@ import json
 import os
 from os.path import join as path, dirname
 from flask import Flask, Blueprint, g, jsonify, request
+import transaction
 from deploylib.client.service import ServiceFile
 from deploylib.plugins import DataMissing
-from .host import DockerHost, Service
+from .host import DockerHost, Service, DeployError
 
 
 api = Blueprint('api', __name__)
@@ -22,10 +23,13 @@ def connect():
 def before_request():
     g.host = connect()
 
-@api.after_request
-def after_request(response):
-    g.host.state.close()
-    return response
+@api.teardown_request
+def after_request(exception):
+    if exception:
+        transaction.abort()
+    else:
+        transaction.commit()
+    g.host.close()
 
 
 @api.before_request
@@ -34,11 +38,10 @@ def check_auth():
     if is_public:
         return
 
-    auth_key = g.host.state.get('auth_key')
-    if not auth_key:
+    if not g.host.db.auth_key:
         return
 
-    if request.headers.get('Authorization') == auth_key:
+    if request.headers.get('Authorization') == g.host.db.auth_key:
         return
 
     return jsonify({'error': 'authorization failed.'})
@@ -48,7 +51,16 @@ def check_auth():
 def list():
     """List all deployments.
     """
-    return jsonify(g.host.get_deployments())
+    out = {}
+    for dname, d in g.host.db.deployments.items():
+        out.setdefault(dname, {})
+        for sname, s in d.services.items():
+            out[dname].setdefault(sname, {'versions': None, 'instances': []})
+            for i in s.instances:
+                out[dname][sname]['instances'].append(i.container_id)
+            out[dname][sname]['versions'] = len(s.versions)
+
+    return jsonify(out)
 
 
 @api.route('/create', methods=['PUT'])
@@ -74,44 +86,44 @@ def setup_services():
     globals = data['globals']
     force = data['force']
 
-    if not deploy_id in g.host.get_deployments():
+    if not deploy_id in g.host.db.deployments:
         return jsonify({'error':  'no such deployment, create first'})
 
-    g.host.state.setdefault('deployments', {})
-    deployment = g.host.state['deployments'].get(deploy_id, {})
-    globals_changed = deployment.get('globals') != globals
-    deployment['globals'] = globals
-    g.host.state.sync()
+    deployment = g.host.db.deployments.get(deploy_id)
+    globals_changed = deployment.globals != globals
+    deployment.globals = globals
 
-    # Before-deploy steps
-    sort_first = g.host.run_plugins('before_deploy', deploy_id, globals, services)
-    g.host.state.sync()
+    try:
+        # Before-deploy steps
+        sort_first = g.host.run_plugins('before_deploy', deploy_id, globals, services)
 
-    # Sometimes certain one-time initialization steps require a service
-    # to be started before others.
-    sorted_services = services.items()
-    def sorter(item):
-        if not item[0] in sort_first:
-            return -1
-        return len(sort_first) - sort_first.index(item[0])
-    if sort_first:
-        sorted_services.sort(key=sorter, reverse=True)
+        # Sometimes certain one-time initialization steps require a service
+        # to be started before others.
+        sorted_services = services.items()
+        def sorter(item):
+            if not item[0] in sort_first:
+                return -1
+            return len(sort_first) - sort_first.index(item[0])
+        if sort_first:
+            sorted_services.sort(key=sorter, reverse=True)
 
-    warnings = []
-    for name, service in sorted_services:
-        try:
-            g.host.deployment_setup_service(
-                deploy_id, Service(name, service), force=globals_changed or force)
-        except DataMissing, e:
-            warnings.append({
-                'type': 'data-missing',
-                'tag': e.tag,
-                'service_name': name
-            })
+        warnings = []
+        for name, service in sorted_services:
+            try:
+                g.host.deployment_setup_service(
+                    deploy_id, Service(name, service), force=globals_changed or force)
+            except DataMissing, e:
+                warnings.append({
+                    'type': 'data-missing',
+                    'tag': e.tag,
+                    'service_name': name
+                })
 
-    # After-deploy steps
-    g.host.run_plugins('post_deploy', services, globals)
-    g.host.state.sync()
+        # After-deploy steps
+        g.host.run_plugins('post_deploy', services, globals)
+
+    except DeployError as e:
+        return jsonify({'error': '%s' % e})
 
     return jsonify({'ok': True, 'warnings': warnings})
 
@@ -173,7 +185,7 @@ def run():
         auth_key = result['<auth-key>']
         with app.app_context():
             g.host = connect()
-            g.host.state['auth_key'] = auth_key
+            g.host.db.auth_key = auth_key
             g.host.create_deployment('', fail=False)
             init_host()
         return

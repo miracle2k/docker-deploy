@@ -11,7 +11,7 @@ class Plugin(object):
         self.host = host
 
     def plugin_storage(self, deploy_id, plugin_name):
-        d = self.host.state['deployments'][deploy_id].setdefault('_data', {})
+        d = self.host.db.deployments[deploy_id].data
         d = d.setdefault(plugin_name, {})
         return d
 

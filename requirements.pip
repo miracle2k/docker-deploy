@@ -3,3 +3,4 @@ Flask==0.10.1
 netifaces==0.8
 docker-py==0.3.0
 requests==2.3.0
+ZODB==4.0.0
