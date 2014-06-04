@@ -86,12 +86,15 @@ class ServiceDef(dict):
         self['kwargs'].update(data)
 
     def copy(self):
-        new_service = self.__class__(self.name, dict.copy(self))
+        # deepcopy(self) would call this function, so we need to do the
+        # initial deepcopy-level manually.
+        datacopy = {}
+        for k, v in self.items():
+            datacopy[k] = copy.deepcopy(v)
+
+        new_service = self.__class__(self.name, datacopy)
         new_service.globals = self.globals
         return new_service
-
-    def __copy__(self):
-        return copy.deepcopy(self)
 
 
 class LocalMachineImplementation(object):
