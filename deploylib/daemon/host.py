@@ -54,7 +54,7 @@ class ServiceDef(dict):
             self.name = name.split('/')[-1]
         else:
             self.name = name
-            self['image'] = data['image']
+            self['image'] = data.pop('image')
 
         self.globals = {}
 

@@ -12,3 +12,8 @@ class TestServiceDef(object):
         d['env']['NEW'] = 42
         assert not 'NEW' in d2['env']
 
+    def test_with_image_key(self):
+        # [Regression] image key is accepted as a regular, not an extra key
+        d = ServiceDef('foo', {'image': 'bar'})
+        assert not d['kwargs']
+
