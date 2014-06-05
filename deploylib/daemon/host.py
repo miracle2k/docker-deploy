@@ -9,6 +9,7 @@ import uuid
 import docker
 import ZODB
 import ZODB.FileStorage
+from deploylib.daemon.backend import DockerOnlyBackend
 from deploylib.daemon.db import DeployDB, Deployment
 
 
@@ -187,8 +188,7 @@ class DockerHost(LocalMachineImplementation):
             DomainPlugin(self),
             SdutilPlugin(self)]
 
-        self.client = docker.Client(
-            base_url=docker_url, version='1.6', timeout=10)
+        self.backend = DockerOnlyBackend(docker_url)
 
     def run_plugins(self, method_name, *args, **kwargs):
         for plugin in self.plugins:
@@ -332,62 +332,17 @@ class DockerHost(LocalMachineImplementation):
         startcfg['env'] = {k: v.format(**local_repl) if isinstance(v, str) else v
                            for k, v in startcfg['env'].items()}
 
-        # If the name provided by the namer already exists, delete it
-        if namer:
-            try:
-                self.client.inspect_container(startcfg['name'])
-            except docker.APIError:
-                pass
-            else:
-                print "Removing existing container %s" % startcfg['name']
-                self.client.kill(startcfg['name'])
-                self.client.remove_container(startcfg['name'])
-
-        print "Pulling image %s" % service['image']
-        print self.client.pull(service['image'])
-
-        print "Creating container %s" % startcfg['name']
-        result = self.client.create_container(
-            image=startcfg['image'],
-            name=startcfg['name'],
-            entrypoint=startcfg['entrypoint'],
-            command=startcfg['cmd'],
-            environment=startcfg['env'],
-            # Seems need to be pre-declared (or or in the image itself)
-            # or the binds won't work during start.
-            ports=startcfg['ports'].keys(),
-            volumes=startcfg['volumes'].values(),
-        )
-        container_id = result['Id']
+        # Create the new container
+        container_id = self.backend.create(startcfg)
+        deployment.services[service.name].append_instance(container_id)
+        print "New container id is %s" % container_id
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
         for inst in deployment.services[service.name].instances:
             print "Killing existing container %s" % inst.container_id
-            try:
-                self.client.stop(inst.container_id, 10)
-            except:
-                pass
+            self.backend.stop(inst)
             deployment.services[service.name].instances.remove(inst)
 
-        # Then, store the new container id.
-        deployment.services[service.name].append_instance(container_id)
-
-        print "New container id is %s" % container_id
-
-        #########################################################
-
-        # We are finally ready to run the container.
-
-        # Make sure the volumes exist
-        for host_path in startcfg['volumes'].keys():
-            if not path.exists(host_path):
-                os.makedirs(host_path)
-
         # Run the container
-        print "Starting container %s" % container_id
-        self.client.start(
-            startcfg['name'],
-            binds=startcfg['volumes'],
-            port_bindings=startcfg['ports'],
-            privileged=startcfg['privileged'])
+        self.backend.start(startcfg)

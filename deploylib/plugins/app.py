@@ -144,7 +144,7 @@ class AppPlugin(Plugin):
         cache_dir = self.host.cache('slugbuilder', deploy_id, service.name)
 
         # Run the slugbuilder
-        docker = self.host.client
+        docker = self.host.backend.client
         docker.pull('flynn/slugbuilder')
         env = self._build_env(deploy_id, service, slug_url)
 
