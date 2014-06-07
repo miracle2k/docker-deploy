@@ -11,6 +11,7 @@ class SdutilPlugin(Plugin):
     to re-declare the entrypoint in the service definition, or otherwise
     things will likely not work.
     """
+
     def before_start(self, deploy_id, service, startcfg, port_assignments):
 
         cfg = service['kwargs'].get('sdutil', {})

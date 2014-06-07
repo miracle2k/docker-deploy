@@ -14,7 +14,8 @@ class DeployDB(object):
 class Deployment(Persistent):
     """A group of containers/services that make up one project."""
 
-    def __init__(self):
+    def __init__(self, id):
+        self.id = id
         self.services = BTrees.OOBTree.BTree()
         self.data = BTrees.OOBTree.BTree()
 
@@ -31,15 +32,21 @@ class Deployment(Persistent):
         service.
         """
         if not name in self.services:
-            self.services[name] = DeployedService()
+            self.services[name] = DeployedService(self, name)
+        return self.services[name]
 
 
 class DeployedService(Persistent):
     """One service that is defined as part of a deployment."""
 
-    def __init__(self):
+    def __init__(self, deployment, name):
+        self.name = name
+        self.deployment = deployment
         self.versions = PersistentList()
         self.instances = PersistentList()
+
+        self.held = False
+        self.hold_message = None
 
     @property
     def latest(self):
@@ -47,8 +54,41 @@ class DeployedService(Persistent):
             return None
         return self.versions[-1]
 
+    def hold(self, reason, definition):
+        """Held services are registered with the deployment and will be
+        started once missing parts become available.
+
+        Our philosophy is that services are only interconnected via service
+        discovery; therefore, order does not matter. Ideally, the "database
+        service" will not register itself before the necessary databases have
+        been created. In real life, often the service discovery registration
+        happens inside the container, and database creation is down from the
+        outside.
+
+        To ease those cases, hold mechanism is a workaround by which the
+        database consumer could be held until the database has been setup.
+
+        It is also used for services that simply rely on additional data
+        before they can run, for example the code of the application that
+        would need to be uploaded first.
+        """
+        if self.versions:
+            raise ValueError("Cannot hold a service that has versions")
+        self.held = True
+        self.hold_message = reason
+        # Remember the service definition so we can later create a version
+        self.definition = definition
+
+    def _remove_hold(self):
+        self.definition = None
+        self.hold_message = False
+        self.held = False
+
     def append_version(self, definition):
-        version = ServiceVersion(definition)
+        if self.held:
+            self._remove_hold()
+
+        version = ServiceVersion(definition, self.deployment.globals.copy())
         self.versions.append(version)
         return version
 
@@ -60,9 +100,9 @@ class ServiceVersion(Persistent):
     """A new version is created whenever the service changes.
     """
 
-    def __init__(self, definition):
-        self.globals = {}
+    def __init__(self, definition, globals):
         self.definition = definition
+        self.globals = globals
 
 
 class ServiceInstance(Persistent):

@@ -57,8 +57,6 @@ class ServiceDef(dict):
             self.name = name
             self['image'] = data.pop('image')
 
-        self.globals = {}
-
         self['cmd'] = data.pop('cmd', '')
         if isinstance(self['cmd'], basestring):
             # docker-py accepts string as well and does the same split.
@@ -94,7 +92,6 @@ class ServiceDef(dict):
             datacopy[k] = copy.deepcopy(v)
 
         new_service = self.__class__(self.name, datacopy)
-        new_service.globals = self.globals
         return new_service
 
 
@@ -157,9 +154,21 @@ class LocalMachineImplementation(object):
             if fail:
                 raise ValueError('Instance %s already exists.' % deploy_id)
             return False
-        self.db.deployments[deploy_id] = Deployment()
+        self.db.deployments[deploy_id] = Deployment(deploy_id)
+        return self.db.deployments[deploy_id]
 
-    def deployment_setup_service(self, deploy_id, service):
+    def set_globals(self, deploy_id, globals):
+        """Set the global data of the deployment.
+
+        Return True if the data was changed.
+        """
+        deployment = self.db.deployments[deploy_id]
+        globals_changed = deployment.globals != globals
+        deployment.globals = globals
+        return globals_changed
+
+    def set_service(self, deploy_id, name, definition):
+        """Add or replace service ``name`` with the new definition."""
         raise NotImplementedError()
 
 
@@ -201,38 +210,55 @@ class DockerHost(LocalMachineImplementation):
         else:
             return False
 
-    def deployment_setup_service(self, deploy_id, service, force=False, **kwargs):
-        """Add a service to the deployment.
+    def set_service(self, deploy_id, name, definition, force=False, **kwargs):
+        """Add a service to the deployment, or replace the existing
+        service with a changed definition.
+
+        Return the database record of the service.
         """
 
         deployment = self.db.deployments[deploy_id]
-        exists = service.name in deployment.services
+        definition = ServiceDef(name, definition)
 
         # If the service is not changed, we can skip it
+        exists = definition.name in deployment.services
         if exists and not force:
-            latest = deployment.services[service.name].latest
-            if latest and latest.definition == service:
-                print "%s has not changed, skipping" % service.name
+            latest = deployment.services[definition.name].latest
+            if latest and latest.definition == definition:
+                print "%s has not changed, skipping" % definition.name
                 return
 
-        service.globals = deployment.globals
+        # Make sure a slot for this service exists.
+        service = deployment.set_service(definition.name)
 
-        # Store the new service definition in the database
-        deployment.set_service(service.name)
+        self.foo(deployment, service, definition)
+        return service
 
+    def foo(self, deployment, service, definition, **kwargs):
         # See if a plugin will handle this.
-        if not self.run_plugins('setup', deploy_id, service):
-            # If not plugin handles this, deploy as a regular docker image.
-            self.deploy_docker_image(deploy_id, service, **kwargs)
-            deployment.services[service.name].append_version(service)
+        handled_by_plugin = self.run_plugins('setup', service, definition.copy())
 
-        self.run_plugins('post_service_deploy', deploy_id, service)
+        # If no plugin handles this, deploy as a regular docker image.
+        if not handled_by_plugin:
+            self.create_container(service, definition, **kwargs)
+            service.append_version(definition)
 
-    def deploy_docker_image(self, deploy_id, service, namer=None):
-        """Deploy a regular docker image.
+        self.run_plugins('post_setup', deployment, service)
+
+    def provide_data(self, deploy_id, service_name, files, info):
+        """Some services rely on external data that cannot be included in
+        the service definition itself (like the code for an application).
+
+        Via this API such data can be added.
+        """
+        service = self.db.deployments[deploy_id].services[service_name]
+        self.run_plugins('on_data_provided', service, files, info)
+
+    def create_container(self, service, definition, namer=None):
+        """Create the docker container that the service defines.
         """
 
-        deployment = self.db.deployments[deploy_id]
+        deployment = service.deployment
 
         def get_free_port():
             return random.randint(10000, 65000)
@@ -240,8 +266,7 @@ class DockerHost(LocalMachineImplementation):
         local_repl = {}
         host_lan_ip = self.get_host_ip()
         local_repl['HOST'] = host_lan_ip
-        local_repl['DEPLOY_ID'] = deploy_id
-        self.run_plugins('provide_local_vars', service, local_repl)
+        local_repl['DEPLOY_ID'] = deployment.id
 
         def replvars(s):
             if not isinstance(s, basestring):
@@ -252,25 +277,25 @@ class DockerHost(LocalMachineImplementation):
         # start config, which means resolving various parts of the service
         # definition to a final value.
         startcfg = {
-            'image': service['image'],
-            'cmd': service['cmd'],
-            'entrypoint': service['entrypoint'],
-            'privileged': service['privileged'],
+            'image': definition['image'],
+            'cmd': definition['cmd'],
+            'entrypoint': definition['entrypoint'],
+            'privileged': definition['privileged'],
             'volumes': {},
             'ports': {},
             'env': {}
         }
 
         # Construct the 'volumes' argument.
-        for volume_name, volume_path in service.get('volumes').items():
+        for volume_name, volume_path in definition.get('volumes').items():
             host_path = path.join(
-                self.volume_base, deploy_id or '__sys__', service.name, volume_name)
+                self.volume_base, deployment.id or '__sys__', definition.name, volume_name)
             startcfg['volumes'][host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
         # to determine which of them need to be mapped to the host and how.
-        defined_ports = service['ports']
-        defined_mappings = service['host_ports']
+        defined_ports = definition['ports']
+        defined_mappings = definition['host_ports']
         port_assignments = {}
         for port_name, container_port in defined_ports.items():
             # Ports may be defined but won't be mapped, assume this by default.
@@ -308,22 +333,22 @@ class DockerHost(LocalMachineImplementation):
                 local_repl[var_name] = container_port
 
         # The environment variables
-        startcfg['env'] = ((service.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
+        startcfg['env'] = ((deployment.globals.get('Env') or {}).get(definition.name, {}) or {}).copy()
         startcfg['env'].update(local_repl.copy())
         startcfg['env']['DISCOVERD'] = '%s:1111' % host_lan_ip
         startcfg['env']['ETCD'] = 'http://%s:4001' % host_lan_ip
-        startcfg['env'].update(service['env'])
+        startcfg['env'].update(definition['env'])
         startcfg['env'] = {replvars(k): replvars(v)
                            for k, v in startcfg['env'].items()}
-        self.run_plugins('provide_environment', deploy_id, service, startcfg['env'])
+        self.run_plugins('provide_environment', deployment, definition, startcfg['env'])
 
         # Construct a name, for informative purposes only
-        startcfg['name'] = namer(service) if namer else "{}-{}-{}".format(
-            deploy_id, service.name, uuid.uuid4().hex[:5])
+        startcfg['name'] = namer(definition) if namer else "{}-{}-{}".format(
+            deployment.id, definition.name, uuid.uuid4().hex[:5])
 
         # We are almost ready, let plugins do some final modifications
         # before we are starting the container.
-        self.run_plugins('before_start', deploy_id, service, startcfg,
+        self.run_plugins('before_start', deployment.id, definition, startcfg,
                          port_assignments)
 
         # Replace local variables in configuration
@@ -334,15 +359,15 @@ class DockerHost(LocalMachineImplementation):
 
         # Create the new container
         container_id = self.backend.create(startcfg)
-        deployment.services[service.name].append_instance(container_id)
+        deployment.services[definition.name].append_instance(container_id)
         print "New container id is %s" % container_id
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
-        for inst in deployment.services[service.name].instances:
+        for inst in deployment.services[definition.name].instances:
             print "Killing existing container %s" % inst.container_id
             self.backend.stop(inst)
-            deployment.services[service.name].instances.remove(inst)
+            deployment.services[definition.name].instances.remove(inst)
 
         # Run the container
         self.backend.start(startcfg)

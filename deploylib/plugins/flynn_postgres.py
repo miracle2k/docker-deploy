@@ -46,7 +46,8 @@ We should support the following different approaches to setting up a database:
 This plugin uses a global Flynn-Postgres section::
 
     Flynn-Postgres:
-        in: db-api
+        in: db
+        via: db-api
         expose_as: POSTGRES_
         id: foobar
 
@@ -81,56 +82,47 @@ class FlynnPostgresPlugin(Plugin):
             '%s%s' % (expose_as, 'DATABASE'): dbname,
         }
 
-    def provide_environment(self, deploy_id, service, env):
-        data = self.plugin_storage(deploy_id, 'flynn_postgres')
+    def provide_environment(self, deployment, service, env):
+        """If the database has already been setup, we inject it's
+        data into every service we provide.
+        """
+        data = deployment.data.get('flynn_postgres', {})
         # For now, only support one standard database
         id = ''
         if id in data:
             env.update(self._make_env(data.get('expose_as'), **data[id]))
 
-    def before_deploy(self, deploy_id, globals, services):
-        """Before any service is deployed within a deployment.
+    def post_setup(self, deployment, service):
+        """After both the postgres container itself and the api container
+        have been setup, we now have to:
+
+        1) create the database.
+        2) unhold any services that are waiting for the database.
         """
-        if not 'Flynn-Postgres' in globals:
+
+        if not 'Flynn-Postgres' in deployment.globals:
             return
 
-        data = self.plugin_storage(deploy_id, 'flynn_postgres')
+        data = deployment.data['flynn_postgres']
+        section = deployment.globals['Flynn-Postgres']
 
-        # For now, only support one standard database
-        id = ''
+        id = ''  # For now, only support one standard database
 
         # Has this database already been setup? We don't need to anything
         if id in data:
             return
 
-        # It hasn't, in which case we need to make the flynn-postgres API
-        # service be installed first so we can setup the database.
-        return [globals['Flynn-Postgres']['for'],
-                globals['Flynn-Postgres']['in']]
-
-    def post_service_deploy(self, deploy_id, service):
-        """Called after a service has been deployed.
-        """
-
-        if not 'Flynn-Postgres' in service.globals:
+        # We go into action once the second of the pg and pg-api
+        # services have been set up.
+        if not service.name in (section['in'], section['via']):
+            return
+        if not section['in'] in deployment.services or not \
+                section['by'] in deployment.services:
             return
 
-        data = self.plugin_storage(deploy_id, 'flynn_postgres')
-
-        # For now, only support one standard database
-        id = ''
-
-        # Has this database already been setup? We don't need to anything
-        if id in data:
-            return
-
-        # If this is not the postgres-flynn API service, ignore
-        if not service.name == service.globals['Flynn-Postgres']['in']:
-            return
-
-        # It is the pg-api service, create the database
+        # Create the database
         sname = '%s-api' % (service['env']['FLYNN_POSTGRES'])
-        sname = sname.format(DEPLOY_ID=deploy_id)
+        sname = sname.format(DEPLOY_ID=deployment.id)
 
         start = time.time()
         while time.time() - start < 40:
@@ -152,5 +144,6 @@ class FlynnPostgresPlugin(Plugin):
 
         else:
             raise EnvironmentError("Cannot find flynn-postgres API: %s" % sname)
+
 
 

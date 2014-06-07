@@ -1,9 +1,8 @@
 import os
-from subprocess import check_output as run
+import subprocess
 import tempfile
 
-from . import Plugin, LocalPlugin, DataMissing
-from deploylib.daemon.host import ServiceDef
+from . import Plugin, LocalPlugin
 from deploylib.client.utils import directory
 
 
@@ -46,89 +45,70 @@ class AppPlugin(Plugin):
     """Will run a 12-factor style app.
     """
 
-    def setup(self, deploy_id, service):
+    def setup(self, service, definition):
         """Called when the plugin is asked to see if it should deploy
         the given service.
         """
-        if not 'git' in service['kwargs']:
+        if not 'git' in definition['kwargs']:
             return False
 
-        # Take the slug that we have already built, from the last deployed
-        # version of the service (deployed  via this upload, or by git push).
-        # If there is no such slug, that means this is a new service, and
-        # we need to ask the client to provide the code.
-        sinfo = self.host.db.deployments[deploy_id].services[service.name]
-        if not sinfo.latest or not getattr(sinfo.latest, 'app_version_id', None):
-            sinfo._definition = service
-            raise DataMissing(service.name, 'git')
+        # Use the slug from the most recent deployed version.
+        if not service.latest:
+            # No code has been provided yet, put service in "hold" status.
+            service.hold('app code not available', definition)
+            # Communicate to the client it may upload the data
+            # XXX ctx.warning('data-missing', service.name, 'git')
+            return True
 
-        slug_url = self._get_slug_url(
-            deploy_id, service.name, sinfo.latest.app_version_id)
-        self.deploy_slugrunner(deploy_id, service, slug_url)
+        self.deploy_slugrunner(
+            service, definition, service.latest.app_version_id)
         return True
 
-    def deploy_slugrunner(self, deploy_id, service, slug_url):
-        """Run the given slug.
-        """
-
-        env = self._build_env(deploy_id, service, slug_url)
-
-        # Put together a rewritten service
-        service = service.copy()
-        service['env'].update(env)
-        service['image'] = 'flynn/slugrunner'
-        service['entrypoint'] = '/runner/init'
-        service['cmd'] = ['start'] + service['cmd']
-        # For compatibility with sdutil plugin - tell it where to find the binary
-        service['kwargs'].setdefault('sdutil', {})
-        service['kwargs']['sdutil']['binary'] = 'sdutil'
-
-        self.host.deploy_docker_image(deploy_id, service)
-
-    def _get_slug_url(self, deploy_id, service_name, slug_name):
-        # Put together an full url for a slug
-        shelf_ip = self.host.discover('shelf')
-        release_id = "{}/{}:{}".format(deploy_id, service_name, slug_name)
-        slug_url = 'http://{}{}'.format(shelf_ip, '/slugs/{}'.format(release_id))
-        return slug_url
-
-    @staticmethod
-    def _build_env(deploy_id, service, slug_url):
-        # Put together some extra environment variables we know the
-        # slugrunner image expects.
-        env = {
-           'APP_ID': deploy_id,
-           'SLUG_URL': slug_url
-        }
-        env.update(service['env'])
-        return env
-
-    def on_data_provided(self, deploy_id, service_name, files, data):
+    def on_data_provided(self, service, files, data):
         """Data that this plugin has requested from the client
-        has been provided.
+        has been uploaded.
         """
         if not 'app' in files:
             return
 
-        deployment = self.host.db.deployments[deploy_id]
+        # Use the held definition, or copy the latest one
+        if service.held:
+            definition = service.definition
+        else:
+            definition = service.latest.definition.copy()
 
-        service = ServiceDef(service_name,
-            deployment.services[service_name]._definition)
-        service.globals = deployment.globals
-
-        # Built into a slug
+        # Build into a slug
         uploaded_file = tempfile.mktemp()
         files['app'].save(uploaded_file)
-        slug_url = self.build(deploy_id, service, uploaded_file, data['app']['version'])
-
-        # Create a new version of the service
-        version = deployment.services[service_name].append_version(service)
-        version.app_version_id = data['app']['version']
+        self.build(service, definition, uploaded_file, data['app']['version'])
 
         # Run this new version
-        self.deploy_slugrunner(deploy_id, service, slug_url)
+        self.deploy_slugrunner(service, definition, data['app']['version'])
 
-    def build(self, deploy_id, service, filename, version):
+    def deploy_slugrunner(self, service, definition, slug_id):
+        """Run the slug ``slug_id`` as a new version of ``service``
+        using the service ``definition``.
+        """
+
+        slug_url = self._get_slug_url(service, slug_id)
+        env = self._build_env(service, definition, slug_url)
+
+        # Put together a rewritten service
+        original_definition = definition
+        definition = definition.copy()
+        definition['env'].update(env)
+        definition['image'] = 'flynn/slugrunner'
+        definition['entrypoint'] = '/runner/init'
+        definition['cmd'] = ['start'] + definition['cmd']
+        # For compatibility with sdutil plugin - tell it where to find the binary
+        definition['kwargs'].setdefault('sdutil', {})
+        definition['kwargs']['sdutil']['binary'] = 'sdutil'
+
+        self.host.create_container(service, definition)
+        version = service.append_version(original_definition)
+        version.app_version_id = slug_id
+
+    def build(self, service, definition, filename, version):
         """Build an app using slugbuilder.
 
         Note: buildstep would give us a real exclusive image, rather than a
@@ -137,16 +117,16 @@ class AppPlugin(Plugin):
         """
 
         # Determine the url where we'll store the slug
-        slug_name = version
-        slug_url = self._get_slug_url(deploy_id, service.name, slug_name)
+        slug_url = self._get_slug_url(service, version)
 
         # To speed up the build, use a cache
-        cache_dir = self.host.cache('slugbuilder', deploy_id, service.name)
+        cache_dir = self.host.cache(
+            'slugbuilder', service.deployment.id, service.name)
 
         # Run the slugbuilder
         docker = self.host.backend.client
         docker.pull('flynn/slugbuilder')
-        env = self._build_env(deploy_id, service, slug_url)
+        env = self._build_env(service, definition, slug_url)
 
         # TODO: Sending data through stdin via the API isn't obvious
         # at all, so we'll fall back on the command line here for now.
@@ -157,13 +137,31 @@ class AppPlugin(Plugin):
         #    environment=env,
         #    volumes={cache_dir: '/tmp/cache:rw'})
         builder_image = os.environ.get('SLUGBUILDER', 'flynn/slugbuilder')
-        result = run('cat {} | docker run -u root -v {cache}:/tmp/cache:rw {env} -i -a stdin '
+        result = subprocess.check_output(
+            'cat {} | docker run -u root -v {cache}:/tmp/cache:rw {env} -i -a stdin '
             '-a stdout {image} {outuri}'.format(
                 filename, outuri=slug_url, cache=cache_dir,
                 image=builder_image,
                 env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()])), shell=True)
         container_id = result.strip()
 
+    def _get_slug_url(self, service, slug_name):
+        # Put together an full url for a slug
+        shelf_ip = self.host.discover('shelf')
+        release_id = "{}/{}:{}".format(
+            service.deployment.id, service.name, slug_name)
+        slug_url = 'http://{}{}'.format(shelf_ip, '/slugs/{}'.format(release_id))
         return slug_url
+
+    @staticmethod
+    def _build_env(service, definition, slug_url):
+        # Put together some extra environment variables we know the
+        # slugrunner image expects.
+        env = {
+           'APP_ID': service.deployment.id,
+           'SLUG_URL': slug_url
+        }
+        env.update(definition['env'])
+        return env
 
 

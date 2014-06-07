@@ -78,7 +78,10 @@ def create():
 
 @api.route('/setup', methods=['POST'])
 def setup_services():
-    """Add or replace services in a deployment.
+    """This API does the following at once:
+
+    - Replace the global data of the deployment.
+    - Set (add or replace) one or more services within the deployment.
     """
     data = request.get_json()
     deploy_id = data['deploy_id']
@@ -89,29 +92,17 @@ def setup_services():
     if not deploy_id in g.host.db.deployments:
         return jsonify({'error':  'no such deployment, create first'})
 
-    deployment = g.host.db.deployments.get(deploy_id)
-    globals_changed = deployment.globals != globals
-    deployment.globals = globals
+    # First, write the new version of the global environment. If it has
+    # changed, we need to recreate all services.
+    globals_changed = g.host.set_globals(deploy_id, globals)
 
     try:
-        # Before-deploy steps
-        sort_first = g.host.run_plugins('before_deploy', deploy_id, globals, services)
-
-        # Sometimes certain one-time initialization steps require a service
-        # to be started before others.
-        sorted_services = services.items()
-        def sorter(item):
-            if not item[0] in sort_first:
-                return -1
-            return len(sort_first) - sort_first.index(item[0])
-        if sort_first:
-            sorted_services.sort(key=sorter, reverse=True)
-
+        # Deploy the actual services.
         warnings = []
-        for name, service in sorted_services:
+        for name, service in services.items():
             try:
-                g.host.deployment_setup_service(
-                    deploy_id, ServiceDef(name, service), force=globals_changed or force)
+                g.host.set_service(
+                    deploy_id, name, service, force=globals_changed or force)
             except DataMissing, e:
                 warnings.append({
                     'type': 'data-missing',
@@ -145,10 +136,10 @@ def upload():
     """
 
     deploy_id = request.values['deploy_id']
-    service = request.values['service_name']
+    service_name = request.values['service_name']
     data = json.loads(request.values.get('data', {}))
 
-    g.host.run_plugins('on_data_provided', deploy_id, service, request.files, data)
+    g.host.provide_data(deploy_id, service_name, request.files, data)
     return jsonify({'ok': True})
 
 
