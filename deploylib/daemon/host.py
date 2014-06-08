@@ -285,7 +285,7 @@ class DockerHost(LocalMachineImplementation):
         # First, we'll need to take the service and create a container
         # start config, which means resolving various parts of the service
         # definition to a final value.
-        startcfg = {
+        runcfg = {
             'image': definition['image'],
             'cmd': definition['cmd'],
             'entrypoint': definition['entrypoint'],
@@ -299,7 +299,7 @@ class DockerHost(LocalMachineImplementation):
         for volume_name, volume_path in definition.get('volumes').items():
             host_path = path.join(
                 self.volume_base, deployment.id or '__sys__', service.name, volume_name)
-            startcfg['volumes'][host_path] = volume_path
+            runcfg['volumes'][host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
         # to determine which of them need to be mapped to the host and how.
@@ -334,7 +334,7 @@ class DockerHost(LocalMachineImplementation):
                     # by default. user can give 0.0.0.0 if he wants to.
                     host_port = (host_lan_ip, host_port[1])
 
-                startcfg['ports'][container_port] = host_port
+                runcfg['ports'][container_port] = host_port
 
                 # These ports can be used in the service definition, for
                 # example as part of the command line or env definition.
@@ -342,19 +342,19 @@ class DockerHost(LocalMachineImplementation):
                 local_repl[var_name] = container_port
 
         # The environment variables
-        startcfg['env'] = ((deployment.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
-        startcfg['env'].update(local_repl.copy())
-        startcfg['env']['DISCOVERD'] = '%s:1111' % host_lan_ip
-        startcfg['env']['ETCD'] = 'http://%s:4001' % host_lan_ip
-        startcfg['env'].update(definition['env'])
-        startcfg['env'] = {replvars(k): replvars(v)
-                           for k, v in startcfg['env'].items()}
-        self.run_plugins('provide_environment', deployment, definition, startcfg['env'])
+        runcfg['env'] = ((deployment.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
+        runcfg['env'].update(local_repl.copy())
+        runcfg['env']['DISCOVERD'] = '%s:1111' % host_lan_ip
+        runcfg['env']['ETCD'] = 'http://%s:4001' % host_lan_ip
+        runcfg['env'].update(definition['env'])
+        runcfg['env'] = {replvars(k): replvars(v)
+                           for k, v in runcfg['env'].items()}
+        self.run_plugins('provide_environment', deployment, definition, runcfg['env'])
 
         # Construct a name; for now, for informative purposes only; later
         # this might be what we use for matching.
         if namer:
-            startcfg['name'] = namer(definition)
+            runcfg['name'] = namer(definition)
         else:
             "{deploy}-{service}-{version}-{instance}".format(
                 deploy=deployment.id, service=service.name,
@@ -364,16 +364,16 @@ class DockerHost(LocalMachineImplementation):
         # We are almost ready, let plugins do some final modifications
         # before we are starting the container.
         self.run_plugins(
-            'before_start', service, definition, startcfg, port_assignments)
+            'before_start', service, definition, runcfg, port_assignments)
 
         # Replace local variables in configuration
-        startcfg['cmd'] = [i.format(**local_repl) for i in startcfg['cmd']]
-        startcfg['entrypoint'] = startcfg['entrypoint'].format(**local_repl)
-        startcfg['env'] = {k: v.format(**local_repl) if isinstance(v, str) else v
-                           for k, v in startcfg['env'].items()}
+        runcfg['cmd'] = [i.format(**local_repl) for i in runcfg['cmd']]
+        runcfg['entrypoint'] = runcfg['entrypoint'].format(**local_repl)
+        runcfg['env'] = {k: v.format(**local_repl) if isinstance(v, str) else v
+                           for k, v in runcfg['env'].items()}
 
         # Create the new container
-        instance_id = self.backend.prepare(startcfg)
+        instance_id = self.backend.prepare(runcfg)
         service.append_instance(instance_id)
         print "New container id is %s" % instance_id
 
@@ -385,4 +385,4 @@ class DockerHost(LocalMachineImplementation):
             service.instances.remove(inst)
 
         # Run the container
-        self.backend.start(startcfg, instance_id)
+        self.backend.start(runcfg, instance_id)
