@@ -11,6 +11,7 @@ import ZODB
 import ZODB.FileStorage
 from deploylib.daemon.backend import DockerOnlyBackend
 from deploylib.daemon.db import DeployDB, Deployment
+from deploylib.plugins.setup_require import RequiresPlugin
 
 
 class DeployError(Exception):
@@ -192,6 +193,7 @@ class DockerHost(LocalMachineImplementation):
         from deploylib.plugins.wait import WaitPlugin
         self.plugins = [
             WaitPlugin(self),
+            RequiresPlugin(self),
             AppPlugin(self),
             FlynnPostgresPlugin(self),
             DomainPlugin(self),
