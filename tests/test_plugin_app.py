@@ -29,7 +29,7 @@ class TestAppPlugin(object):
         assert not service.versions
         assert not host.backend.create.called
         # New definition of the service has been cached
-        assert service.definition['kwargs']['foo'] == 'bar'
+        assert service.held_version.definition['kwargs']['foo'] == 'bar'
 
     def test_first_data_upload(self, host):
         """App code for a held service is provided via upload.

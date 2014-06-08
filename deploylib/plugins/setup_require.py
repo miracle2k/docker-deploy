@@ -54,8 +54,15 @@ class RequiresPlugin(Plugin):
         for existing_service in service.deployment.services.values():
             if not existing_service.held:
                 continue
+
+            # See if the service has a require key (it may be held for
+            # other reasons).
             version = existing_service.held_version
-            if service.name in iterablify(version.definition['kwargs']['require']):
+            reqs = iterablify(version.definition['kwargs'].get('require'))
+            if not reqs:
+                continue
+
+            if service.name in reqs:
                 # Attempt to setup this service now (which will recursively
                 # trigger this plugin again if there are complex deps).
                 print('Dependency for held service %s now available' % existing_service.name)
