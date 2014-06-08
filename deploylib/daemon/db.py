@@ -1,3 +1,4 @@
+from copy import deepcopy
 import BTrees.OOBTree
 from persistent import Persistent
 from persistent.list import PersistentList
@@ -92,7 +93,9 @@ class DeployedService(Persistent):
         """
         if definition is None:
             definition = self.latest.definition
-        return ServiceVersion(definition, self.deployment.globals)
+        data = deepcopy(self.latest.data) if self.latest else {}
+
+        return ServiceVersion(definition, self.deployment.globals, data=data)
 
     def append_version(self, version):
         if self.held:
@@ -110,9 +113,10 @@ class ServiceVersion(Persistent):
     """A new version is created whenever the service changes.
     """
 
-    def __init__(self, definition, globals):
+    def __init__(self, definition, globals, data=None):
         self.definition = definition
         self.globals = globals
+        self.data = BTrees.OOBTree.BTree(data or {})
         self.instance_count = 0
 
 

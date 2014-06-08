@@ -52,7 +52,7 @@ class TestAppPlugin(object):
         assert len(service.versions) == 1
         assert service.versions[0].definition == canonical_definition('bar', {})[1]
         assert service.versions[0].globals == {'a': 1}
-        assert service.versions[0].app_version_id == 42
+        assert service.versions[0].data['app_version_id'] == 42
         # Also created via the backend.
         assert len(host.backend.start.mock_calls) == 1
 
@@ -64,7 +64,7 @@ class TestAppPlugin(object):
         service = deployment.set_service('bar')
         version = service.append_version(
             service.derive(canonical_definition('bar', {})[1]))
-        version.app_version_id = 3
+        version.data['app_version_id'] = 3
 
         host.provide_data(
             'foo', 'bar',  {'app': FileStorage()}, {'app': {'version': 99}})
@@ -76,7 +76,7 @@ class TestAppPlugin(object):
         assert len(service.versions) == 2
         assert service.versions[0].definition ==service.versions[1].definition
         assert service.versions[0].globals ==service.versions[1].globals
-        assert service.versions[1].app_version_id == 99
+        assert service.versions[1].data['app_version_id'] == 99
 
     def test_new_version_via_config_change(self, host):
         """Changing the service definition creates a new version
@@ -86,7 +86,7 @@ class TestAppPlugin(object):
         service = deployment.set_service('bar')
         version = service.append_version(
             service.derive(canonical_definition('bar', {})[1]))
-        version.app_version_id = 3
+        version.data['app_version_id'] = 3
 
         service = host.set_service('foo', 'bar', {'git': '.'})
 
@@ -96,5 +96,5 @@ class TestAppPlugin(object):
         assert len(service.versions) == 2
         assert service.versions[1].definition == canonical_definition('bar', {'git': '.'})[1]
         assert service.versions[1].globals ==service.versions[0].globals
-        assert service.versions[1].app_version_id == service.versions[0].app_version_id
+        assert service.versions[1].data['app_version_id'] == service.versions[0].data['app_version_id']
 

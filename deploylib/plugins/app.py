@@ -69,7 +69,7 @@ class AppPlugin(Plugin):
             version = service.held_version
         else:
             version = service.derive()
-        version.app_version_id = data['app']['version']
+        version.data['app_version_id'] = data['app']['version']
 
         # Build into a slug
         uploaded_file = tempfile.mktemp()
@@ -105,7 +105,7 @@ class AppPlugin(Plugin):
         """
 
         # Determine the url where we'll store the slug
-        slug_url = self._get_slug_url(service, version.app_version_id)
+        slug_url = self._get_slug_url(service, version.data['app_version_id'])
 
         # To speed up the build, use a cache
         cache_dir = self.host.cache(
@@ -146,7 +146,7 @@ class AppPlugin(Plugin):
         # slugrunner image expects.
         env = {
            'APP_ID': service.deployment.id,
-           'SLUG_URL': self._get_slug_url(service, version.app_version_id)
+           'SLUG_URL': self._get_slug_url(service, version.data['app_version_id'])
         }
         env.update(version.definition['env'])
         return env
