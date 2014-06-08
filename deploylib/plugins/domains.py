@@ -69,8 +69,8 @@ class DomainPlugin(Plugin):
     the strowger router.
     """
 
-    def post_deploy(self, services, globals):
-        domains = globals.get('Domains', {})
+    def on_globals_changed(self, deployment):
+        domains = deployment.globals.get('Domains', {})
         if not domains:
             return
 
@@ -85,3 +85,11 @@ class DomainPlugin(Plugin):
                                     cert=data.get('cert'))
 
         # TODO: Support further plugins to configure the domain DNS
+        # TODO: The strowger interaction relates to how we could do
+        #    switch-over upgrades, so in the future we might have to
+        #    do this not when the globals change, but after the services
+        #    are running. I can already see it: The domain definition
+        #    points to a "mark". Via the cli we can set the mark to a
+        #    new service version. A {VERSION} variable can be used in
+        #    service-definitions to register different versions with
+        #    discovery.

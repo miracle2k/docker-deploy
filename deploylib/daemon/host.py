@@ -166,6 +166,8 @@ class LocalMachineImplementation(object):
         deployment = self.db.deployments[deploy_id]
         globals_changed = deployment.globals != globals
         deployment.globals = globals
+        if globals_changed:
+            self.run_plugins('on_globals_changed', deployment)
         return globals_changed
 
     def set_service(self, deploy_id, name, definition):

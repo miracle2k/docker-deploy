@@ -110,9 +110,6 @@ def setup_services():
                     'service_name': name
                 })
 
-        # After-deploy steps
-        g.host.run_plugins('post_deploy', services, globals)
-
     except DeployError as e:
         return jsonify({'error': '%s' % e})
 
