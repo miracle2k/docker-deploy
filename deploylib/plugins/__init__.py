@@ -9,6 +9,9 @@ class Plugin(object):
 
     Currently, the following methods are supported:
 
+    on_globals_changed()
+        Global data of a deployment has changed.
+
     setup()
         Plugins can replace the default "service as a docker container"
         setup, and indicate this by returning ``True``.
