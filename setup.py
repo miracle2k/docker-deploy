@@ -21,7 +21,9 @@ setup(
         'flask>=0.10',
         'netifaces>=0.10',
         'requests==2.2.1',
-        'pyyaml>=3.11'
+        'pyyaml>=3.11',
+        'gevent>=0.6.1',
+        'clint>=0.3.7',
     ],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',

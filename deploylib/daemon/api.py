@@ -1,10 +1,14 @@
 import json
 import os
 from os.path import join as path, dirname
-from flask import Flask, Blueprint, g, jsonify, request
+import traceback
+from flask import Flask, Blueprint, g, jsonify, request, Response, \
+    stream_with_context
 import transaction
-from deploylib.client.service import ServiceFile
-from deploylib.plugins import DataMissing
+import gevent
+import gevent.queue
+import gevent.monkey
+from .context import Context, set_context, ctx
 from .host import DockerHost, DeployError
 
 
@@ -25,6 +29,7 @@ def before_request():
 
 @api.teardown_request
 def after_request(exception):
+    print("request done runs now...")
     if exception:
         transaction.abort()
     else:
@@ -45,6 +50,48 @@ def check_auth():
         return
 
     return jsonify({'error': 'authorization failed.'})
+
+
+class StreamingResponse(Context, Response):
+
+    def __init__(self, *a, **kw):
+        Context.__init__(self)
+
+        kw['mimetype'] = 'text/json'
+        def generator():
+            for item in self.queue:
+                yield json.dumps(item)
+                yield "\n"
+        Response.__init__(self, stream_with_context(generator()), *a, **kw)
+
+
+def process_in_greenlet(worker, *args, **kwargs):
+    """Helper for streaming responses and background operations.
+
+    Runs the worker in a greenlet, after setting our context object that
+    will write to the response.
+
+    You need to pass Flask context locals via arguments, because they
+    won't resolve in the greenlet.
+    """
+    ctx = StreamingResponse()
+    def wrapped():
+        set_context(ctx)
+        try:
+            worker(*args, **kwargs)
+        except DeployError, e:
+            traceback.print_exc()
+            ctx.fatal('%s' % e)
+            transaction.commit()
+        except Exception, e:
+            traceback.print_exc()
+            # Unexpected error cause a transaction rollback
+            ctx.fatal('%s' % e)
+            transaction.abort()
+        else:
+            ctx.done()
+    gevent.spawn(wrapped)
+    return ctx
 
 
 @api.route('/list')
@@ -73,7 +120,7 @@ def create():
     except ValueError, e:
         return jsonify({'error': str(e)})
     else:
-        return jsonify({'ok': True})
+        return jsonify({'job': 'Created deployment %s' % data['deploy_id']})
 
 
 @api.route('/setup', methods=['POST'])
@@ -83,37 +130,28 @@ def setup_services():
     - Replace the global data of the deployment.
     - Set (add or replace) one or more services within the deployment.
     """
+
     data = request.get_json()
     deploy_id = data['deploy_id']
     services = data['services']
     globals = data['globals']
     force = data['force']
 
-    if not deploy_id in g.host.db.deployments:
-        return jsonify({'error':  'no such deployment, create first'})
+    def worker(host):
+        if not deploy_id in host.db.deployments:
+            ctx.fatal('no such deployment, create first')
+            return
 
-    # First, write the new version of the global environment. If it has
-    # changed, we need to recreate all services.
-    globals_changed = g.host.set_globals(deploy_id, globals)
+        # First, write the new version of the global environment. If it has
+        # changed, we need to recreate all services.
+        globals_changed = host.set_globals(deploy_id, globals)
 
-    try:
         # Deploy the actual services.
-        warnings = []
         for name, service in services.items():
-            try:
-                g.host.set_service(
-                    deploy_id, name, service, force=globals_changed or force)
-            except DataMissing, e:
-                warnings.append({
-                    'type': 'data-missing',
-                    'tag': e.tag,
-                    'service_name': name
-                })
+            host.set_service(deploy_id, name, service,
+                             force=globals_changed or force)
 
-    except DeployError as e:
-        return jsonify({'error': '%s' % e})
-
-    return jsonify({'ok': True, 'warnings': warnings})
+    return process_in_greenlet(worker, g.host)
 
 
 @api.route('/upload', methods=['POST'])
@@ -136,8 +174,10 @@ def upload():
     service_name = request.values['service_name']
     data = json.loads(request.values.get('data', {}))
 
-    g.host.provide_data(deploy_id, service_name, request.files, data)
-    return jsonify({'ok': True})
+    def worker(host, files):
+        host.provide_data(deploy_id, service_name, files, data)
+
+    return process_in_greenlet(worker, g.host, request.files)
 
 
 def init_host():
@@ -145,6 +185,7 @@ def init_host():
     Initialize the host. Will make sure core services such as etcd
     and discoverd are running as they should.
     """
+    from deploylib.client.service import ServiceFile
     servicefile = ServiceFile.load(path(dirname(__file__), 'Bootstrap'), ordered=True)
 
     def namer(service):
@@ -167,6 +208,8 @@ def run():
     ./api.py init <auth-key>
     ./api.py [<bind>]
     """
+    gevent.monkey.patch_all()
+
     import docopt
     result = docopt.docopt(run.__doc__)
     if result['init']:
@@ -184,6 +227,10 @@ def run():
         port = 5555
     else:
         host, port = bind_opt
+
+    # from gevent.wsgi import WSGIServer
+    # server = WSGIServer((host, int(port)), app)
+    # server.serve_forever()
     app.run(host, int(port), use_reloader=os.environ.get('RELOADER') == '1')
 
 

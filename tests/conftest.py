@@ -3,6 +3,7 @@ import os
 import pytest
 import responses as responses_lib
 import transaction
+from deploylib.daemon.context import set_context, Context
 from deploylib.daemon.host import DockerHost
 
 
@@ -50,6 +51,9 @@ def envsetup(request):
     subprocess_patcher = mock.patch(
         "subprocess.check_output", side_effect=container_id)
     subprocess_patcher.start()
+
+    # Make sure there is always a context available
+    set_context(Context())
 
     def end():
         subprocess_patcher.stop()

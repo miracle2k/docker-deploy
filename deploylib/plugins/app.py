@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 
 from . import Plugin, LocalPlugin
-from deploylib.client.utils import directory
+from deploylib.daemon.context import ctx
 
 
 class LocalAppPlugin(LocalPlugin):
@@ -16,6 +16,9 @@ class LocalAppPlugin(LocalPlugin):
 
         This should return a dict of files that will be uploaded.
         """
+        run = subprocess.check_output
+        from deploylib.client.utils import directory
+
         if what != 'git':
             return False
 
@@ -55,7 +58,7 @@ class AppPlugin(Plugin):
             # No code has been provided yet, put service in "hold" status.
             service.hold('app code not available', version)
             # Communicate to the client it may upload the data
-            # XXX ctx.warning('data-missing', service.name, 'git')
+            ctx.custom(**{'data-request': service.name, 'tag': 'git'})
             return True
 
     def on_data_provided(self, service, files, data):
@@ -70,6 +73,9 @@ class AppPlugin(Plugin):
         else:
             version = service.derive()
         version.data['app_version_id'] = data['app']['version']
+
+        ctx.job('building slug for %s, version %s' % (
+            service.name, data['app']['version']))
 
         # Build into a slug
         uploaded_file = tempfile.mktemp()

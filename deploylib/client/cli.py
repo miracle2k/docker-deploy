@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from contextlib import closing
 
 import sys
 import os
@@ -8,6 +9,7 @@ import ConfigParser
 
 import click
 import requests
+from clint.textui import puts, indent, colored
 
 from deploylib.plugins.app import LocalAppPlugin
 from deploylib.client.service import ServiceFile
@@ -23,6 +25,25 @@ class Api(object):
         self.session = requests.Session()
         self.session.headers['Authorization'] = auth
 
+    def _server_events(self, response):
+        """Server streams lines of JSON objects.
+
+        Supported types are, identified by the existence of the key:
+
+        job
+            The job being currently processed. This is like a header
+            for the log messages that follow.
+
+        log
+            A log message within the current job.
+
+        """
+        with closing(response):
+            for line in response.iter_lines(chunk_size=5):
+                if not line:
+                    continue
+                yield json.loads(line)
+
     def request(self, method, url, *args, **kwargs):
         url = urljoin(self.url, url)
         if 'json' in kwargs:
@@ -31,6 +52,8 @@ class Api(object):
             kwargs['headers'].update({'content-type': 'application/json'})
         response = getattr(self.session, method)(url, *args, **kwargs)
         response.raise_for_status()
+        if kwargs.get('stream'):
+            return self._server_events(response)
         data = response.json()
         if 'error' in data:
             raise RuntimeError(data['error'])
@@ -47,13 +70,13 @@ class Api(object):
             'deploy_id': deploy_id,
             'services': servicefile.services,
             'globals': servicefile.globals,
-            'force': force})
+            'force': force}, stream=True)
 
     def upload(self, deploy_id, service_name, files, data=None):
         return self.request('post', 'upload', files=files, data={
             'deploy_id': deploy_id,
             'service_name': service_name,
-            'data': json.dumps(data)})
+            'data': json.dumps(data)}, stream=True)
 
 
 PLUGINS = [
@@ -73,6 +96,30 @@ def run_plugins(method_name, *args, **kwargs):
         return False
 
 
+def with_printer(event_stream):
+    """Given a stream of server events, will output the default
+    one that relate to the process messages, will pass through those
+    that are unknown.
+    """
+    for event in event_stream:
+        if 'job' in event:
+            puts('-----> %s' % event['job'])
+        elif 'log' in event:
+            with indent(7):
+                puts('%s' % event['log'])
+        elif 'error' in event:
+            with indent(7):
+                puts(colored.red('Error: %s' % event['error']))
+        else:
+            yield event
+
+
+def print_jobs(event_stream):
+    """Call :meth:`with_printer`, but consume all events."""
+    for event in with_printer(event_stream):
+        raise ValueError(event)
+
+
 class Config(ConfigParser.ConfigParser):
 
     def __init__(self):
@@ -86,7 +133,6 @@ class Config(ConfigParser.ConfigParser):
 
     def __getitem__(self, item):
         return dict(self.items(item))
-
 
 
 class App(object):
@@ -129,22 +175,28 @@ def deploy(app, service_file, deploy_id, create, force):
     service_file = ServiceFile.load(service_file, plugin_runner=run_plugins)
 
     if create:
-        api.create(deploy_id)
+        print_jobs(api.create(deploy_id))
 
-    result = api.setup(deploy_id, service_file, force=force)
+    requested_uploads = []
+    for event in with_printer(api.setup(deploy_id, service_file, force=force)):
+        if 'data-request' in event:
+            requested_uploads.append(event)
+            continue
+        raise ValueError(event)
 
-    for warning in result.get('warnings', []):
-        if warning['type'] != 'data-missing':
-            raise RuntimeError(warning['type'])
-
+    for event in requested_uploads:
         filedata = run_plugins(
-            'provide_data', service_file.services[warning['service_name']],
-            warning['tag'])
+            'provide_data',
+            service_file.services[event['data-request']],
+            event['tag'])
         files = {k: open(v[0], 'rb') for k, v in filedata.items()}
         data = {k: v[1] for k, v in filedata.items()}
 
-        api.upload(deploy_id, warning['service_name'],
-                   data=data, files=files)
+        puts('-----> Service %s requested data %s, uploading...' %
+             (event['data-request'], event['tag']))
+
+        print_jobs(api.upload(
+                deploy_id, event['data-request'], data=data, files=files))
 
 
 @main.command()
@@ -173,8 +225,6 @@ def add_server(app, name, url, auth):
     app.config.set('server "%s"' % name, 'url', url)
     app.config.set('server "%s"' % name, 'auth', auth)
     app.config.save()
-
-
 
 
 def run():

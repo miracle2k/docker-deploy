@@ -81,7 +81,6 @@ class DockerOnlyBackend(object):
         return cid
 
     def start(self, runcfg, instance_id):
-        print "Starting container %s" % runcfg['name']
         self.client.start(
             runcfg['name'],
             binds=runcfg['volumes'],

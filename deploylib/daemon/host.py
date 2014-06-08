@@ -5,13 +5,11 @@ import shlex
 from subprocess import check_output as run, CalledProcessError
 import random
 import netifaces
-import uuid
-import docker
 import ZODB
 import ZODB.FileStorage
 from deploylib.daemon.backend import DockerOnlyBackend
 from deploylib.daemon.db import DeployDB, Deployment
-from deploylib.plugins.setup_require import RequiresPlugin
+from .context import ctx
 
 
 class DeployError(Exception):
@@ -170,10 +168,6 @@ class LocalMachineImplementation(object):
             self.run_plugins('on_globals_changed', deployment)
         return globals_changed
 
-    def set_service(self, deploy_id, name, definition):
-        """Add or replace service ``name`` with the new definition."""
-        raise NotImplementedError()
-
 
 class DockerHost(LocalMachineImplementation):
     """This is our high-level internal API.
@@ -193,6 +187,7 @@ class DockerHost(LocalMachineImplementation):
         from deploylib.plugins.sdutil import SdutilPlugin
         from deploylib.plugins.flynn_postgres import FlynnPostgresPlugin
         from deploylib.plugins.wait import WaitPlugin
+        from deploylib.plugins.setup_require import RequiresPlugin
         self.plugins = [
             WaitPlugin(self),
             RequiresPlugin(self),
@@ -221,6 +216,8 @@ class DockerHost(LocalMachineImplementation):
         Return the database record of the service.
         """
 
+        ctx.job('%s - installing' % name)
+
         deployment = self.db.deployments[deploy_id]
         name, definition = canonical_definition(name, definition)
 
@@ -229,7 +226,7 @@ class DockerHost(LocalMachineImplementation):
         if exists and not force:
             latest = deployment.services[name].latest
             if latest and latest.definition == definition:
-                print "%s has not changed, skipping" % name
+                ctx.log("service has not changed, skipping")
                 return
 
         # Make sure a slot for this service exists.
@@ -251,6 +248,9 @@ class DockerHost(LocalMachineImplementation):
         # If no plugin handles this, deploy as a regular docker image.
         if not handled_by_plugin:
             self.create_container(service, version, **kwargs)
+        else:
+            if service.held:
+                ctx.log('service was held: %s' % service.hold_message)
 
         self.run_plugins('post_setup', service, version)
 
@@ -361,7 +361,7 @@ class DockerHost(LocalMachineImplementation):
         if namer:
             runcfg['name'] = namer(definition)
         else:
-            "{deploy}-{service}-{version}-{instance}".format(
+            runcfg['name'] = "{deploy}-{service}-{version}-{instance}".format(
                 deploy=deployment.id, service=service.name,
                 version=len(service.versions),
                 instance=service.latest.instance_count if service.latest else 1)
@@ -383,8 +383,8 @@ class DockerHost(LocalMachineImplementation):
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
         for inst in service.instances:
-            print "Killing existing container %s" % inst.container_id
-            self.backend.terminate(inst)
+            ctx.log("Killing existing container %s" % inst.container_id)
+            self.backend.terminate(inst.container_id)
             service.instances.remove(inst)
 
         # Run the container
@@ -392,4 +392,4 @@ class DockerHost(LocalMachineImplementation):
 
         service.append_version(version)
         service.append_instance(instance_id)
-        print "New instance id is %s" % instance_id
+        ctx.log("New instance id is %s" % instance_id)
