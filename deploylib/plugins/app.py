@@ -49,9 +49,9 @@ class AppPlugin(Plugin):
         if not 'git' in version.definition['kwargs']:
             return False
 
-        # If this service has not been deployed before yet, we do not
-        # have a slug yet, so hold the service back for now.
-        if not service.latest:
+        # If this service version has no slug id attached, hold it back
+        # for now and ask the client to provide the code.
+        if not version.data.get('app_version_id'):
             # No code has been provided yet, put service in "hold" status.
             service.hold('app code not available', version)
             # Communicate to the client it may upload the data

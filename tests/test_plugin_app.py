@@ -37,7 +37,7 @@ class TestAppPlugin(object):
         deployment = host.create_deployment('foo')
         host.set_globals('foo', {'a': 1})
         service = deployment.set_service('bar')
-        service.hold('bla', service.derive(canonical_definition('bar', {})[1]))
+        service.hold('bla', service.derive(canonical_definition('bar', {'git': '.'})[1]))
 
         host.provide_data(
             'foo', 'bar',  {'app': FileStorage()}, {'app': {'version': 42}})
@@ -50,7 +50,7 @@ class TestAppPlugin(object):
         assert not service.held_version   # was cleared
         # A new version was created in the db
         assert len(service.versions) == 1
-        assert service.versions[0].definition == canonical_definition('bar', {})[1]
+        assert service.versions[0].definition == canonical_definition('bar', {'git': '.'})[1]
         assert service.versions[0].globals == {'a': 1}
         assert service.versions[0].data['app_version_id'] == 42
         # Also created via the backend.
@@ -63,7 +63,7 @@ class TestAppPlugin(object):
         host.set_globals('foo', {'a': 1})
         service = deployment.set_service('bar')
         version = service.append_version(
-            service.derive(canonical_definition('bar', {})[1]))
+            service.derive(canonical_definition('bar', {'git': '.'})[1]))
         version.data['app_version_id'] = 3
 
         host.provide_data(
@@ -85,16 +85,17 @@ class TestAppPlugin(object):
         host.set_globals('foo', {'a': 1})
         service = deployment.set_service('bar')
         version = service.append_version(
-            service.derive(canonical_definition('bar', {})[1]))
+            service.derive(canonical_definition('bar', {'git': '.'})[1]))
         version.data['app_version_id'] = 3
 
-        service = host.set_service('foo', 'bar', {'git': '.'})
+        service = host.set_service('foo', 'bar', {'git': '.', 'foo': 1})
 
         # No slug was built
         assert len(subprocess.check_output.mock_calls) == 0
         # But the new one was deployed as a new version
         assert len(service.versions) == 2
-        assert service.versions[1].definition == canonical_definition('bar', {'git': '.'})[1]
+        assert service.versions[1].definition == \
+               canonical_definition('bar', {'git': '.', 'foo': 1})[1]
         assert service.versions[1].globals ==service.versions[0].globals
         assert service.versions[1].data['app_version_id'] == service.versions[0].data['app_version_id']
 
