@@ -6,7 +6,7 @@ from urlparse import urljoin
 import json
 import ConfigParser
 
-from docopt import docopt
+import click
 import requests
 
 from deploylib.plugins.app import LocalAppPlugin
@@ -88,76 +88,93 @@ class Config(ConfigParser.ConfigParser):
         return dict(self.items(item))
 
 
-def main(argv):
+
+class App(object):
+    def __init__(self):
+        self.config = config = Config()
+
+        # Determine the server to interact with
+        deploy_url = 'http://localhost:5555/api'
+        auth = ''
+        # Should we use a predefined server?
+        servername = os.environ.get('SERVER')
+        if servername:
+            if not config.has_section('server "%s"' % servername):
+                raise EnvironmentError("Server %s is not configured" % servername)
+            deploy_url = config['server "%s"' % servername].get('url', deploy_url)
+            auth = config['server "%s"' % servername].get('auth', auth)
+        # Explicit overrides
+        deploy_url = os.environ.get('DEPLOY_URL', deploy_url)
+        auth = os.environ.get('AUTH', auth)
+
+        self.api = Api(deploy_url, auth)
+
+
+@click.group()
+@click.pass_context
+def main(ctx):
+    ctx.obj = App()
+
+
+@main.command()
+@click.option('--create', default=False, is_flag=True)
+@click.option('--force', default=False, is_flag=True)
+@click.argument('service-file', type=click.Path())
+@click.argument('deploy-id')
+@click.pass_obj
+def deploy(app, service_file, deploy_id, create, force):
+    """Take a template, deploy it to the server.
     """
-    Usage:
-      deploy.py deploy [--create] [--force] <service-file> <deploy-id>
-      deploy.py list
-      deploy.py list <deploy_id>
-      deploy.py init <host>
-      deploy.py add-server <name> <url> <auth>
+    api = app.api
+    service_file = ServiceFile.load(service_file, plugin_runner=run_plugins)
+
+    if create:
+        api.create(deploy_id)
+
+    result = api.setup(deploy_id, service_file, force=force)
+
+    for warning in result.get('warnings', []):
+        if warning['type'] != 'data-missing':
+            raise RuntimeError(warning['type'])
+
+        filedata = run_plugins(
+            'provide_data', service_file.services[warning['service_name']],
+            warning['tag'])
+        files = {k: open(v[0], 'rb') for k, v in filedata.items()}
+        data = {k: v[1] for k, v in filedata.items()}
+
+        api.upload(deploy_id, warning['service_name'],
+                   data=data, files=files)
+
+
+@main.command()
+@click.pass_obj
+def list(app):
+    """List deployments and services.
     """
-    args = docopt(main.__doc__, argv)
-    config = Config()
-
-    # Determine the server to interact with
-    deploy_url = 'http://localhost:5555/api'
-    auth = ''
-    # Should we use a predefined server?
-    servername = os.environ.get('SERVER')
-    if servername:
-        if not config.has_section('server "%s"' % servername):
-            raise EnvironmentError("Server %s is not configured" % servername)
-        deploy_url = config['server "%s"' % servername].get('url', deploy_url)
-        auth = config['server "%s"' % servername].get('auth', auth)
-    # Explicit overrides
-    deploy_url = os.environ.get('DEPLOY_URL', deploy_url)
-    auth = os.environ.get('AUTH', auth)
-
-    api = Api(deploy_url, auth)
-
-    if args['deploy']:
-        servicefile = ServiceFile.load(args['<service-file>'], plugin_runner=run_plugins)
-        deploy_id = args['<deploy-id>']
-
-        if args['--create']:
-            api.create(deploy_id)
-
-        result = api.setup(deploy_id, servicefile, force=args['--force'])
-
-        for warning in result.get('warnings', []):
-            if warning['type'] != 'data-missing':
-                raise RuntimeError(warning['type'])
-
-            filedata = run_plugins(
-                'provide_data', servicefile.services[warning['service_name']],
-                warning['tag'])
-            files = {k: open(v[0], 'rb') for k, v in filedata.items()}
-            data = {k: v[1] for k, v in filedata.items()}
-
-            api.upload(deploy_id, warning['service_name'],
-                       data=data, files=files)
+    result = app.api.list()
+    for name, instance in result.items():
+        print '%s (%s services)' % (name, len(instance))
+        for service, data in instance.items():
+            print('  %s (%s versions)' % (service, data['versions']))
+            for i in data['instances']:
+                print('    %s' % i)
 
 
-    elif args['list']:
-        result = api.list()
-        for name, instance in result.items():
-            print '%s (%s services)' % (name, len(instance))
-            for service, data in instance.items():
-                print('  %s (%s versions)' % (service, data['versions']))
-                for i in data['instances']:
-                    print('    %s' % i)
-        return
+@main.command('add-server')
+@click.argument('name')
+@click.argument('url')
+@click.argument('auth')
+@click.pass_obj
+def add_server(app, name, url, auth):
+    """Remember a new server address.
+    """
+    app.config.add_section('server "%s"' % name)
+    app.config.set('server "%s"' % name, 'url', url)
+    app.config.set('server "%s"' % name, 'auth', auth)
+    app.config.save()
 
-    elif args['init']:
-        # Connect to the host via SSH, install this package.
-        raise NotImplementedError()
 
-    elif args['add-server']:
-        config.add_section('server "%s"' % args['<name>'])
-        config.set('server "%s"' % args['<name>'], 'url', args['<url>'])
-        config.set('server "%s"' % args['<name>'], 'auth', args['<auth>'])
-        config.save()
 
 
 def run():
