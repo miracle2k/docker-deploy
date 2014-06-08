@@ -1,24 +1,6 @@
-import os
-import mock
-import pytest
 import subprocess
 from werkzeug.datastructures import FileStorage
 from deploylib.daemon.host import ServiceDef
-from . import host
-
-
-@pytest.fixture(autouse=True)
-def envsetup(request):
-    os.environ['HOST_IP'] = '127.0.0.1'
-
-    def container_id(a, **kwargs): return 'container-id'
-    subprocess_patcher = mock.patch(
-        "subprocess.check_output", side_effect=container_id)
-    subprocess_patcher.start()
-
-    def end():
-        subprocess_patcher.stop()
-    request.addfinalizer(end)
 
 
 class TestAppPlugin(object):

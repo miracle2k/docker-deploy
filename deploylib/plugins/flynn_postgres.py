@@ -46,15 +46,10 @@ We should support the following different approaches to setting up a database:
 This plugin uses a global Flynn-Postgres section::
 
     Flynn-Postgres:
-        in: db
-        via: db-api
-        expose_as: POSTGRES_
-        id: foobar
-
-    Flynn-Postgres:
         foobar:
+            in: db
+            via: db-api
             expose_as: POSTGRES_
-            id: foobar
 
 ``in`` is the flynn/postgres API service to use. ``expose_as`` is the
 environment variable prefix to use. These variables like ``POSTGRES_HOST``
@@ -62,6 +57,10 @@ will be available to all containers, so it works perfectly if multiple
 containers depend on it. An dict structure can be used for multiple
 databases. The key is used to allow renaming the ``expose_as`` option
 w/o triggering a new setup.
+
+TODO: Should support a mode where the actual postgres containers are
+run externally (so the plugin can just assume they are running), and
+containers can instead use "require" to reference the database defined.
 """
 
 from subprocess import CalledProcessError
@@ -86,11 +85,13 @@ class FlynnPostgresPlugin(Plugin):
         """If the database has already been setup, we inject it's
         data into every service we provide.
         """
-        data = deployment.data.get('flynn_postgres', {})
-        # For now, only support one standard database
-        id = ''
-        if id in data:
-            env.update(self._make_env(data.get('expose_as'), **data[id]))
+        section = deployment.globals.get('Flynn-Postgres')
+        if not section:
+            return
+
+        data = deployment.data.get('flynn-postgres', {})
+        for dbid, created_db in data.items():
+            env.update(self._make_env(section[dbid].get('expose_as'), **data[dbid]))
 
     def post_setup(self, deployment, service):
         """After both the postgres container itself and the api container
@@ -103,31 +104,35 @@ class FlynnPostgresPlugin(Plugin):
         if not 'Flynn-Postgres' in deployment.globals:
             return
 
-        data = deployment.data['flynn_postgres']
-        section = deployment.globals['Flynn-Postgres']
+        for dbid, dbcfg in deployment.globals['Flynn-Postgres'].items():
+            self.setup_database(deployment, service, dbid, dbcfg)
 
-        id = ''  # For now, only support one standard database
+    def setup_database(self, deployment, service, dbid, dbcfg):
+        data = deployment.data.setdefault('flynn-postgres', {})
 
         # Has this database already been setup? We don't need to anything
-        if id in data:
+        if dbid in data:
             return
 
         # We go into action once the second of the pg and pg-api
         # services have been set up.
-        if not service.name in (section['in'], section['via']):
+        if not service.name in (dbcfg['in'], dbcfg['via']):
             return
-        if not section['in'] in deployment.services or not \
-                section['by'] in deployment.services:
+        if not dbcfg['in'] in deployment.services or not \
+                dbcfg['via'] in deployment.services:
             return
 
-        # Create the database
-        sname = '%s-api' % (service['env']['FLYNN_POSTGRES'])
-        sname = sname.format(DEPLOY_ID=deployment.id)
+        # Determine the service discovery name of the API container.
+        # This is a bit of a hack.
+        api_service = deployment.services[dbcfg['via']]
+        discovery_name = api_service.latest.definition['env']['FLYNN_POSTGRES']
+        discovery_name = discovery_name.format(DEPLOY_ID=deployment.id)
 
         start = time.time()
         while time.time() - start < 40:
             try:
-                httpurl = 'http://%s/databases' % self.host.discover(sname)
+                httpurl = 'http://%s/databases' % self.host.discover(
+                    discovery_name)
             except (CalledProcessError, ConnectionError):
                 time.sleep(1)
                 continue
@@ -137,13 +142,15 @@ class FlynnPostgresPlugin(Plugin):
             except (ConnectionError):
                 time.sleep(1)
             else:
-                data[id] = {}
-                data[id]['dbname'] = created['env']['PGDATABASE']
-                data[id]['user'] = created['env']['PGUSER']
-                data[id]['password'] = created['env']['PGPASSWORD']
+                data[dbid] = {}
+                data[dbid]['dbname'] = created['env']['PGDATABASE']
+                data[dbid]['user'] = created['env']['PGUSER']
+                data[dbid]['password'] = created['env']['PGPASSWORD']
+                break
 
         else:
-            raise EnvironmentError("Cannot find flynn-postgres API: %s" % sname)
+            raise EnvironmentError(
+                "Cannot find flynn-postgres API: %s" % discovery_name)
 
 
 
