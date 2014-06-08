@@ -363,8 +363,8 @@ class DockerHost(LocalMachineImplementation):
 
         # We are almost ready, let plugins do some final modifications
         # before we are starting the container.
-        self.run_plugins('before_start', deployment.id, definition, startcfg,
-                         port_assignments)
+        self.run_plugins(
+            'before_start', service, definition, startcfg, port_assignments)
 
         # Replace local variables in configuration
         startcfg['cmd'] = [i.format(**local_repl) for i in startcfg['cmd']]

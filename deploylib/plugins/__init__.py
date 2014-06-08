@@ -27,9 +27,9 @@ class Plugin(object):
         are being put together, this gives a plugin the chance to add some
         of it's own variables.
 
-    before_start
-
-
+    before_start()
+        Called just before an instance is created. Plugins can modify the
+        runcfg.
     """
 
     def __init__(self, host):

@@ -12,16 +12,17 @@ class SdutilPlugin(Plugin):
     things will likely not work.
     """
 
-    def before_start(self, deploy_id, service, startcfg, port_assignments):
+    def before_start(self, service, definition, runcfg, port_assignments):
 
-        cfg = service['kwargs'].get('sdutil', {})
+        deploy_id = service.deployment.id
+        cfg = definition['kwargs'].get('sdutil', {})
         binary = cfg.get('binary', '/sdutil')
 
         current_cmd = []
-        if startcfg['entrypoint']:
-            current_cmd.append(startcfg['entrypoint'])
-        if startcfg['cmd']:
-            current_cmd.extend(startcfg['cmd'])
+        if runcfg['entrypoint']:
+            current_cmd.append(runcfg['entrypoint'])
+        if runcfg['cmd']:
+            current_cmd.extend(runcfg['cmd'])
         new_cmd = current_cmd
 
         # Do service consumption first, such that we won't be registered
@@ -41,7 +42,7 @@ class SdutilPlugin(Plugin):
                 if not map['host']:
                     continue
                 register_as = '{did}:{sname}'.format(
-                    did=deploy_id, sname=service.name)
+                    did=deploy_id, sname=definition.name)
                 if pname:
                     # deploy:service:port or deploy:service for the
                     # default port, indicated by an empty string.
@@ -55,6 +56,6 @@ class SdutilPlugin(Plugin):
 
         # Be sure to replace both cmd and any existing entrypoint
         if new_cmd != current_cmd:
-            startcfg['cmd'] = new_cmd[1:]
-            startcfg['entrypoint'] = new_cmd[0]
+            runcfg['cmd'] = new_cmd[1:]
+            runcfg['entrypoint'] = new_cmd[0]
 
