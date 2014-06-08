@@ -57,4 +57,4 @@ class RequiresPlugin(Plugin):
                 # Attempt to setup this service now (which will recursively
                 # trigger this plugin again if there are complex deps).
                 print('Dependency for held service %s now available' % existing_service.name)
-                self.host.foo(deployment, existing_service, existing_service.definition)
+                self.host.setup_service(deployment, existing_service, existing_service.definition)

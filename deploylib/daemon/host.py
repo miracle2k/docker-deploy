@@ -233,10 +233,15 @@ class DockerHost(LocalMachineImplementation):
         # Make sure a slot for this service exists.
         service = deployment.set_service(name)
 
-        self.foo(deployment, service, definition)
+        self.setup_service(deployment, service, definition)
         return service
 
-    def foo(self, deployment, service, definition, **kwargs):
+    def setup_service(self, deployment, service, definition, **kwargs):
+        """Internal method to go through the service setup process, to
+        be used by plugins. Needs to be passed the db objects, and the
+        canonical service definition.
+        """
+
         # See if a plugin will handle this.
         handled_by_plugin = self.run_plugins('setup', service, definition.copy())
 
