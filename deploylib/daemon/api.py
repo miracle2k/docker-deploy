@@ -5,7 +5,7 @@ from flask import Flask, Blueprint, g, jsonify, request
 import transaction
 from deploylib.client.service import ServiceFile
 from deploylib.plugins import DataMissing
-from .host import DockerHost, ServiceDef, DeployError
+from .host import DockerHost, DeployError
 
 
 api = Blueprint('api', __name__)
@@ -155,8 +155,8 @@ def init_host():
         # attaching ids, deployment id etc. "etcd" vs "sys-etcd-fe438e".
         return service.name
     for name, service in servicefile.services.items():
-        g.host.deployment_setup_service(
-            '', ServiceDef(name, service), namer=namer, force=True)
+        g.host.set_service(
+            '', name, service, namer=namer, force=True)
 
 
 app = Flask(__name__)

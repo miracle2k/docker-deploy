@@ -39,51 +39,7 @@ def normalize_port_mapping(s):
     return s, ''
 
 
-class ServiceDef(dict):
-    """Normalize a service definition into a canonical state such that
-    we'll be able to tell whether it changed.
-    """
-
-    def __init__(self, name, data=None):
-        dict.__init__(self, {})
-
-        data = data.copy() if data else {}
-
-        # Image can be given instead of an explicit name. The last
-        # part of the image will be used as the name only.
-        if not 'image' in data:
-            self['image'] = name
-            self.name = name.split('/')[-1]
-        else:
-            self.name = name
-            self['image'] = data.pop('image')
-
-        self['cmd'] = data.pop('cmd', '')
-        if isinstance(self['cmd'], basestring):
-            # docker-py accepts string as well and does the same split.
-            # To allow our internal code to rely on one format, we normalize
-            # to a list earlier.
-            self['cmd'] = shlex.split(self['cmd'])
-        self['entrypoint'] = data.pop('entrypoint', '')
-        self['env'] = data.pop('env', {})
-        self['volumes'] = data.pop('volumes', {})
-        self['privileged'] = data.pop('privileged', False)
-        self['host_ports'] = {
-            k: normalize_port_mapping(v)
-            for k, v in data.pop('host_ports', {}).items()}
-
-        ports = data.pop('ports', None)
-        if not ports:
-            # If no ports are given, always provide a default port
-            ports = {'': 'assign'}
-        if isinstance(ports, (list, tuple)):
-            # If a list of port names is given, consider them to be 'assign'
-            ports = {k: 'assign' for k in ports}
-        self['ports'] = ports
-
-        # Hide all other, non-default keys in a separate dict
-        self['kwargs'] = data.pop('kwargs', {})
-        self['kwargs'].update(data)
+class DeepCopyDict(dict):
 
     def copy(self):
         # deepcopy(self) would call this function, so we need to do the
@@ -91,9 +47,53 @@ class ServiceDef(dict):
         datacopy = {}
         for k, v in self.items():
             datacopy[k] = copy.deepcopy(v)
+        return self.__class__(datacopy)
 
-        new_service = self.__class__(self.name, datacopy)
-        return new_service
+
+def canonical_definition(name, definition):
+    """Normalize a service definition into a canonical state such that
+    we'll be able to tell whether it changed.
+    """
+    canonical = {}
+    definition = definition.copy()
+
+    # Image can be given instead of an explicit name. The last
+    # part of the image will be used as the name only.
+    if not 'image' in definition:
+        canonical['image'] = name
+        name = name.split('/')[-1]
+    else:
+        name = name
+        canonical['image'] = definition.pop('image')
+
+    canonical['cmd'] = definition.pop('cmd', '')
+    if isinstance(canonical['cmd'], basestring):
+        # docker-py accepts string as well and does the same split.
+        # To allow our internal code to rely on one format, we normalize
+        # to a list earlier.
+        canonical['cmd'] = shlex.split(canonical['cmd'])
+    canonical['entrypoint'] = definition.pop('entrypoint', '')
+    canonical['env'] = definition.pop('env', {})
+    canonical['volumes'] = definition.pop('volumes', {})
+    canonical['privileged'] = definition.pop('privileged', False)
+    canonical['host_ports'] = {
+        k: normalize_port_mapping(v)
+        for k, v in definition.pop('host_ports', {}).items()}
+
+    ports = definition.pop('ports', None)
+    if not ports:
+        # If no ports are given, always provide a default port
+        ports = {'': 'assign'}
+    if isinstance(ports, (list, tuple)):
+        # If a list of port names is given, consider them to be 'assign'
+        ports = {k: 'assign' for k in ports}
+    canonical['ports'] = ports
+
+    # Hide all other, non-default keys in a separate dict
+    canonical['kwargs'] = definition.pop('kwargs', {})
+    canonical['kwargs'].update(definition)
+
+    return name, DeepCopyDict(canonical)
 
 
 class LocalMachineImplementation(object):
@@ -220,18 +220,18 @@ class DockerHost(LocalMachineImplementation):
         """
 
         deployment = self.db.deployments[deploy_id]
-        definition = ServiceDef(name, definition)
+        name, definition = canonical_definition(name, definition)
 
         # If the service is not changed, we can skip it
-        exists = definition.name in deployment.services
+        exists = name in deployment.services
         if exists and not force:
-            latest = deployment.services[definition.name].latest
+            latest = deployment.services[name].latest
             if latest and latest.definition == definition:
-                print "%s has not changed, skipping" % definition.name
+                print "%s has not changed, skipping" % name
                 return
 
         # Make sure a slot for this service exists.
-        service = deployment.set_service(definition.name)
+        service = deployment.set_service(name)
 
         self.foo(deployment, service, definition)
         return service
@@ -291,7 +291,7 @@ class DockerHost(LocalMachineImplementation):
         # Construct the 'volumes' argument.
         for volume_name, volume_path in definition.get('volumes').items():
             host_path = path.join(
-                self.volume_base, deployment.id or '__sys__', definition.name, volume_name)
+                self.volume_base, deployment.id or '__sys__', service.name, volume_name)
             startcfg['volumes'][host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
@@ -335,7 +335,7 @@ class DockerHost(LocalMachineImplementation):
                 local_repl[var_name] = container_port
 
         # The environment variables
-        startcfg['env'] = ((deployment.globals.get('Env') or {}).get(definition.name, {}) or {}).copy()
+        startcfg['env'] = ((deployment.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
         startcfg['env'].update(local_repl.copy())
         startcfg['env']['DISCOVERD'] = '%s:1111' % host_lan_ip
         startcfg['env']['ETCD'] = 'http://%s:4001' % host_lan_ip
@@ -346,7 +346,7 @@ class DockerHost(LocalMachineImplementation):
 
         # Construct a name, for informative purposes only
         startcfg['name'] = namer(definition) if namer else "{}-{}-{}".format(
-            deployment.id, definition.name, uuid.uuid4().hex[:5])
+            deployment.id, service.name, uuid.uuid4().hex[:5])
 
         # We are almost ready, let plugins do some final modifications
         # before we are starting the container.
@@ -361,15 +361,15 @@ class DockerHost(LocalMachineImplementation):
 
         # Create the new container
         container_id = self.backend.create(startcfg)
-        deployment.services[definition.name].append_instance(container_id)
+        deployment.services[service.name].append_instance(container_id)
         print "New container id is %s" % container_id
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
-        for inst in deployment.services[definition.name].instances:
+        for inst in deployment.services[service.name].instances:
             print "Killing existing container %s" % inst.container_id
             self.backend.stop(inst)
-            deployment.services[definition.name].instances.remove(inst)
+            deployment.services[service.name].instances.remove(inst)
 
         # Run the container
         self.backend.start(startcfg)
