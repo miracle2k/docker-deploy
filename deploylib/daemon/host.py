@@ -351,9 +351,15 @@ class DockerHost(LocalMachineImplementation):
                            for k, v in startcfg['env'].items()}
         self.run_plugins('provide_environment', deployment, definition, startcfg['env'])
 
-        # Construct a name, for informative purposes only
-        startcfg['name'] = namer(definition) if namer else "{}-{}-{}".format(
-            deployment.id, service.name, uuid.uuid4().hex[:5])
+        # Construct a name; for now, for informative purposes only; later
+        # this might be what we use for matching.
+        if namer:
+            startcfg['name'] = namer(definition)
+        else:
+            "{deploy}-{service}-{version}-{instance}".format(
+                deploy=deployment.id, service=service.name,
+                version=len(service.versions),
+                instance=service.latest.instance_count if service.latest else 1)
 
         # We are almost ready, let plugins do some final modifications
         # before we are starting the container.
@@ -367,16 +373,16 @@ class DockerHost(LocalMachineImplementation):
                            for k, v in startcfg['env'].items()}
 
         # Create the new container
-        container_id = self.backend.create(startcfg)
-        deployment.services[service.name].append_instance(container_id)
-        print "New container id is %s" % container_id
+        instance_id = self.backend.prepare(startcfg)
+        service.append_instance(instance_id)
+        print "New container id is %s" % instance_id
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
-        for inst in deployment.services[service.name].instances:
+        for inst in service.instances:
             print "Killing existing container %s" % inst.container_id
-            self.backend.stop(inst)
-            deployment.services[service.name].instances.remove(inst)
+            self.backend.terminate(inst)
+            service.instances.remove(inst)
 
         # Run the container
-        self.backend.start(startcfg)
+        self.backend.start(startcfg, instance_id)

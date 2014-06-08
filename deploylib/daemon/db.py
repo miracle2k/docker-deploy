@@ -94,6 +94,8 @@ class DeployedService(Persistent):
 
     def append_instance(self, container_id):
         self.instances.append(ServiceInstance(container_id, self.latest))
+        # TODO: We need to make sure we have self.latest here.
+        #self.latest.instance_count += 1
 
 
 class ServiceVersion(Persistent):
@@ -103,6 +105,7 @@ class ServiceVersion(Persistent):
     def __init__(self, definition, globals):
         self.definition = definition
         self.globals = globals
+        self.instance_count = 0
 
 
 class ServiceInstance(Persistent):

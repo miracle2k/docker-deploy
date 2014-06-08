@@ -54,7 +54,7 @@ class TestAppPlugin(object):
         assert service.versions[0].globals == {'a': 1}
         assert service.versions[0].app_version_id == 42
         # Also created via the backend.
-        assert len(host.backend.create.mock_calls) == 1
+        assert len(host.backend.start.mock_calls) == 1
 
     def test_subsequent_data_upload(self, host):
         """Uploading a new piece of data creates new version.

@@ -14,26 +14,48 @@ Possible backends that I can imagine right now are:
 - Pass runcfg as a job to flynn-controller (we might not have to manage
      multiple different hosts ourselves).
 - Create CoreOS fleet service files, and invoke those.
-
-
-
-FLYNN-HOST implementation
-        FLYNN-CONTROLLER implementation (each host uses a segment of the same flyn-controller)
-        FLEET implementation (all host instances write to the local init dir, but represent
-                              different actual hosts to run services on)
-           on-create: make fleetfile
-           on-start: invoke fleet
-
-        INITD implementation (single-host only)
-           on-create: create container + initd file
-             pull + create + create file
-             ----> at this point we have created the version
-           on-start: start container manually
-             ----> before run, shut down old containers
 """
+
 import os
 import docker
 from os import path
+
+
+class Backend(object):
+    """A backend provides the following operations:
+
+    prepare(runcfg)
+        A optional method called before start() that basically allows
+        the backend to fail early, before the caller might start to
+        shutdown any existing instances they might want to replace.
+
+    start(runcfg) -> instance id
+        Spin up an instance of the thing in runcfg.
+
+    status(instance id)
+        Is the instance up or down.
+
+    terminate(instance id)
+        Remove the instance.
+
+    This design is flexible enough to allow a supervisor based backend to
+    choose whether a service instance should be kept up by way of
+    restarting the same container (i.e. an instance is mapped to a single
+    docker container), or by using 'docker run' to create a new container
+    every time the instance comes up.
+    """
+
+    def prepare(self, runcfg):
+        pass
+
+    def start(self, runcfg, instance_id=None):
+        raise NotImplementedError()
+
+    def terminate(self, instance_id):
+        raise NotImplementedError()
+
+    def status(self, instance_id):
+        raise NotImplementedError()
 
 
 class DockerOnlyBackend(object):
@@ -48,25 +70,28 @@ class DockerOnlyBackend(object):
         self.client = docker.Client(
             base_url=docker_url, version='1.6', timeout=10)
 
-    def create(self, runcfg):
-        return self.create_container(runcfg)
+    def prepare(self, runcfg):
+        cid = self.create_container(runcfg)
 
-    def start(self, runcfg):
         # Make sure the volumes exist
         for host_path in runcfg['volumes'].keys():
             if not path.exists(host_path):
                 os.makedirs(host_path)
 
+        return cid
+
+    def start(self, runcfg, instance_id):
         print "Starting container %s" % runcfg['name']
         self.client.start(
             runcfg['name'],
             binds=runcfg['volumes'],
             port_bindings=runcfg['ports'],
             privileged=runcfg['privileged'])
+        return instance_id
 
-    def stop(self, container_id):
+    def terminate(self, instance_id):
         try:
-            self.client.stop(container_id, 10)
+            self.client.stop(instance_id, 10)
         except:
             pass
 
@@ -94,7 +119,7 @@ class DockerOnlyBackend(object):
             entrypoint=runcfg['entrypoint'],
             command=runcfg['cmd'],
             environment=runcfg['env'],
-            # Seems need to be pre-declared (or or in the image itself)
+            # Seems needs to be pre-declared (or in the image itself)
             # or the binds won't work during start.
             ports=runcfg['ports'].keys(),
             volumes=runcfg['volumes'].values(),

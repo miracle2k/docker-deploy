@@ -54,6 +54,6 @@ class TestFlynnPostgres(object):
         # Deploy a service
         host.set_service('foo', 'a-service', {})
         # Have a look at the vars used
-        call = host.backend.create.mock_calls[0]
+        call = host.backend.start.mock_calls[0]
         runcfg = call[1][0]
         assert runcfg['env']['POSTGRES_DATABASE'] == 'foo'
