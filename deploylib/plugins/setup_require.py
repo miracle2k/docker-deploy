@@ -25,7 +25,8 @@ class RequiresPlugin(Plugin):
     before this plugin releases holds on their dependent services.
     """
 
-    def setup(self, service, definition):
+    def setup(self, service, version):
+        definition = version.definition
         requirements = iterablify(definition['kwargs'].get('require'))
         if not requirements:
             return
@@ -43,18 +44,19 @@ class RequiresPlugin(Plugin):
             return
 
         # No they are not, hold this service for now
-        service.hold('waiting for requirement: %s' % dep, definition)
+        service.hold('waiting for requirement: %s' % dep, version)
         return True
 
-    def post_setup(self, deployment, service):
+    def post_setup(self, service, _):
         """Search for any service that has been held due to lack of
         this service that has just been set up.
         """
-        for existing_service in deployment.services.values():
+        for existing_service in service.deployment.services.values():
             if not existing_service.held:
                 continue
-            if service.name in iterablify(existing_service.definition['kwargs']['require']):
+            version = existing_service.held_version
+            if service.name in iterablify(version.definition['kwargs']['require']):
                 # Attempt to setup this service now (which will recursively
                 # trigger this plugin again if there are complex deps).
                 print('Dependency for held service %s now available' % existing_service.name)
-                self.host.setup_service(deployment, existing_service, existing_service.definition)
+                self.host.setup_version(existing_service, version)

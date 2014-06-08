@@ -45,57 +45,49 @@ class AppPlugin(Plugin):
     """Will run a 12-factor style app.
     """
 
-    def setup(self, service, definition):
-        """Called when the plugin is asked to see if it should deploy
-        the given service.
-        """
-        if not 'git' in definition['kwargs']:
+    def setup(self, service, version):
+        if not 'git' in version.definition['kwargs']:
             return False
 
-        # Use the slug from the most recent deployed version.
+        # If this service has not been deployed before yet, we do not
+        # have a slug yet, so hold the service back for now.
         if not service.latest:
             # No code has been provided yet, put service in "hold" status.
-            service.hold('app code not available', definition)
+            service.hold('app code not available', version)
             # Communicate to the client it may upload the data
             # XXX ctx.warning('data-missing', service.name, 'git')
             return True
 
-        self.deploy_slugrunner(
-            service, definition, service.latest.app_version_id)
-        return True
-
     def on_data_provided(self, service, files, data):
-        """Data that this plugin has requested from the client
-        has been uploaded.
+        """Client has uploaded the app code.
         """
         if not 'app' in files:
             return
 
-        # Use the held definition, or copy the latest one
+        # Use the held version, or copy the latest one
         if service.held:
-            definition = service.definition
+            version = service.held_version
         else:
-            definition = service.latest.definition.copy()
+            version = service.derive()
+        version.app_version_id = data['app']['version']
 
         # Build into a slug
         uploaded_file = tempfile.mktemp()
         files['app'].save(uploaded_file)
-        self.build(service, definition, uploaded_file, data['app']['version'])
+        self.build(service, version, uploaded_file)
 
         # Run this new version
-        self.deploy_slugrunner(service, definition, data['app']['version'])
+        self.host.setup_version(service, version)
 
-    def deploy_slugrunner(self, service, definition, slug_id):
-        """Run the slug ``slug_id`` as a new version of ``service``
-        using the service ``definition``.
+    def rewrite_service(self, service, version, definition):
+        """Convert service to be run as a slugrunner.
         """
+        if not 'git' in version.definition['kwargs']:
+            return False
 
-        slug_url = self._get_slug_url(service, slug_id)
-        env = self._build_env(service, definition, slug_url)
+        env = self._build_env(service, version)
 
         # Put together a rewritten service
-        original_definition = definition
-        definition = definition.copy()
         definition['env'].update(env)
         definition['image'] = 'flynn/slugrunner'
         definition['entrypoint'] = '/runner/init'
@@ -104,11 +96,7 @@ class AppPlugin(Plugin):
         definition['kwargs'].setdefault('sdutil', {})
         definition['kwargs']['sdutil']['binary'] = 'sdutil'
 
-        self.host.create_container(service, definition)
-        version = service.append_version(original_definition)
-        version.app_version_id = slug_id
-
-    def build(self, service, definition, filename, version):
+    def build(self, service, version, filename):
         """Build an app using slugbuilder.
 
         Note: buildstep would give us a real exclusive image, rather than a
@@ -117,7 +105,7 @@ class AppPlugin(Plugin):
         """
 
         # Determine the url where we'll store the slug
-        slug_url = self._get_slug_url(service, version)
+        slug_url = self._get_slug_url(service, version.app_version_id)
 
         # To speed up the build, use a cache
         cache_dir = self.host.cache(
@@ -126,7 +114,7 @@ class AppPlugin(Plugin):
         # Run the slugbuilder
         docker = self.host.backend.client
         docker.pull('flynn/slugbuilder')
-        env = self._build_env(service, definition, slug_url)
+        env = self._build_env(service, version)
 
         # TODO: Sending data through stdin via the API isn't obvious
         # at all, so we'll fall back on the command line here for now.
@@ -153,15 +141,14 @@ class AppPlugin(Plugin):
         slug_url = 'http://{}{}'.format(shelf_ip, '/slugs/{}'.format(release_id))
         return slug_url
 
-    @staticmethod
-    def _build_env(service, definition, slug_url):
+    def _build_env(self, service, version):
         # Put together some extra environment variables we know the
         # slugrunner image expects.
         env = {
            'APP_ID': service.deployment.id,
-           'SLUG_URL': slug_url
+           'SLUG_URL': self._get_slug_url(service, version.app_version_id)
         }
-        env.update(definition['env'])
+        env.update(version.definition['env'])
         return env
 
 

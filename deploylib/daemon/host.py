@@ -234,25 +234,25 @@ class DockerHost(LocalMachineImplementation):
 
         # Make sure a slot for this service exists.
         service = deployment.set_service(name)
+        version = service.derive(definition)
 
-        self.setup_service(deployment, service, definition)
+        self.setup_version(service, version)
         return service
 
-    def setup_service(self, deployment, service, definition, **kwargs):
+    def setup_version(self, service, version, **kwargs):
         """Internal method to go through the service setup process, to
         be used by plugins. Needs to be passed the db objects, and the
         canonical service definition.
         """
 
         # See if a plugin will handle this.
-        handled_by_plugin = self.run_plugins('setup', service, definition.copy())
+        handled_by_plugin = self.run_plugins('setup', service, version)
 
         # If no plugin handles this, deploy as a regular docker image.
         if not handled_by_plugin:
-            self.create_container(service, definition, **kwargs)
-            service.append_version(definition)
+            self.create_container(service, version, **kwargs)
 
-        self.run_plugins('post_setup', deployment, service)
+        self.run_plugins('post_setup', service, version)
 
     def provide_data(self, deploy_id, service_name, files, info):
         """Some services rely on external data that cannot be included in
@@ -263,11 +263,16 @@ class DockerHost(LocalMachineImplementation):
         service = self.db.deployments[deploy_id].services[service_name]
         self.run_plugins('on_data_provided', service, files, info)
 
-    def create_container(self, service, definition, namer=None):
-        """Create the docker container that the service defines.
+    def create_container(self, service, version, namer=None):
+        """Create the docker container that the service(-version) defines.
         """
 
         deployment = service.deployment
+
+        # Start by letting plugins rewrite the definition
+        definition = version.definition.copy()
+        self.run_plugins(
+            'rewrite_service', service, version, definition)
 
         def get_free_port():
             return random.randint(10000, 65000)
@@ -342,7 +347,7 @@ class DockerHost(LocalMachineImplementation):
                 local_repl[var_name] = container_port
 
         # The environment variables
-        runcfg['env'] = ((deployment.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
+        runcfg['env'] = ((version.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
         runcfg['env'].update(local_repl.copy())
         runcfg['env']['DISCOVERD'] = '%s:1111' % host_lan_ip
         runcfg['env']['ETCD'] = 'http://%s:4001' % host_lan_ip
@@ -374,8 +379,6 @@ class DockerHost(LocalMachineImplementation):
 
         # Create the new container
         instance_id = self.backend.prepare(runcfg)
-        service.append_instance(instance_id)
-        print "New container id is %s" % instance_id
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
@@ -385,4 +388,8 @@ class DockerHost(LocalMachineImplementation):
             service.instances.remove(inst)
 
         # Run the container
-        self.backend.start(runcfg, instance_id)
+        instance_id = self.backend.start(runcfg, instance_id)
+
+        service.append_version(version)
+        service.append_instance(instance_id)
+        print "New instance id is %s" % instance_id

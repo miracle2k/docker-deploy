@@ -54,7 +54,7 @@ class DeployedService(Persistent):
             return None
         return self.versions[-1]
 
-    def hold(self, reason, definition):
+    def hold(self, reason, version):
         """Held services are registered with the deployment and will be
         started once missing parts become available.
 
@@ -77,25 +77,33 @@ class DeployedService(Persistent):
         self.held = True
         self.hold_message = reason
         # Remember the service definition so we can later create a version
-        self.definition = definition
+        self.held_version = version
 
     def _remove_hold(self):
-        self.definition = None
+        self.held_version = None
         self.hold_message = False
         self.held = False
 
-    def append_version(self, definition):
+    def derive(self, definition=None):
+        """Derive a new version from the latest one, or create the first.
+
+        This version is not yet added to the service; to this later using
+        :meth:``append_version`` after you have setup the version.
+        """
+        if definition is None:
+            definition = self.latest.definition
+        return ServiceVersion(definition, self.deployment.globals)
+
+    def append_version(self, version):
         if self.held:
             self._remove_hold()
 
-        version = ServiceVersion(definition, self.deployment.globals.copy())
         self.versions.append(version)
         return version
 
     def append_instance(self, container_id):
         self.instances.append(ServiceInstance(container_id, self.latest))
-        # TODO: We need to make sure we have self.latest here.
-        #self.latest.instance_count += 1
+        self.latest.instance_count += 1
 
 
 class ServiceVersion(Persistent):

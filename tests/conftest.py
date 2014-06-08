@@ -17,6 +17,8 @@ def host(request, tmpdir):
 
     # Mock any backend calls
     host.backend = mock.Mock()
+    host.backend.prepare.return_value = 'abc'
+    host.backend.start.return_value = 'abc'
     # Test version of discovery client
     host.discover = lambda s: s
 

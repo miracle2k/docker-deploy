@@ -93,14 +93,12 @@ class FlynnPostgresPlugin(Plugin):
         for dbid, created_db in data.items():
             env.update(self._make_env(section[dbid].get('expose_as'), **data[dbid]))
 
-    def post_setup(self, deployment, service):
+    def post_setup(self, service, version):
         """After both the postgres container itself and the api container
-        have been setup, we now have to:
-
-        1) create the database.
-        2) unhold any services that are waiting for the database.
+        have been setup, we now have to create the database.
         """
 
+        deployment = service.deployment
         if not 'Flynn-Postgres' in deployment.globals:
             return
 

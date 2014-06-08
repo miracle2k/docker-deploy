@@ -11,15 +11,16 @@ from deploylib.plugins import Plugin
 
 class WaitPlugin(Plugin):
 
-    def setup(self, deploy_id, service):
+    def setup(self, service, version):
         # TODO: Make sure this runs before other setup() hooks.
-        if not 'wait' in service['kwargs']:
+        definition = version.definition
+        if not 'wait' in definition['kwargs']:
             return
 
-        url = urlparse(service['kwargs']['wait'])
+        url = urlparse(definition['kwargs']['wait'])
 
         is_closed = True
-        print("Waiting for %s" % service['kwargs']['wait'])
+        print("Waiting for %s" % definition['kwargs']['wait'])
         while not is_closed:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             is_closed = sock.connect_ex((url.host, url.port))

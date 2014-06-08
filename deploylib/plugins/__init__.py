@@ -14,21 +14,25 @@ class Plugin(object):
 
     setup()
         Plugins can replace the default "service as a docker container"
-        setup, and indicate this by returning ``True``.
+        setup, and indicate this by returning ``True``. I can see this
+        as being useful for cool things like running on other platforms
+        like Heroku.
 
-        Used for example for 12-factor apps that are run via slugrunner.
-        But you could even use this to run things on other hosters like
-        Heroku.
-
-        A plugin can use the ``self.host.create_container`` API, and *MUST*
-        take care of setting up the proper new ``ServiceVersion`` instances.
+        Also very useful for holding services back that are still waiting
+        for dependencies.
 
     post_setup()
+
+    rewrite_service()
+        Plugins have a chance to rewrite the service definition. Used
+        for example to enable apps via the slugrunner image.
 
     provide_environment()
         When the docker container is created, and the environment variables
         are being put together, this gives a plugin the chance to add some
         of it's own variables.
+
+        # TODO: Can rewrite_service do this?
 
     before_start()
         Called just before an instance is created. Plugins can modify the

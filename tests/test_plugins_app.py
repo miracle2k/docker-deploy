@@ -37,7 +37,7 @@ class TestAppPlugin(object):
         deployment = host.create_deployment('foo')
         host.set_globals('foo', {'a': 1})
         service = deployment.set_service('bar')
-        service.hold('bla', canonical_definition('bar', {})[1])
+        service.hold('bla', service.derive(canonical_definition('bar', {})[1]))
 
         host.provide_data(
             'foo', 'bar',  {'app': FileStorage()}, {'app': {'version': 42}})
@@ -47,7 +47,7 @@ class TestAppPlugin(object):
         assert 'http://shelf' in subprocess.check_output.mock_calls[0][1][0]
         # Service no longer held
         assert not service.held
-        assert not service.definition   # was cleared
+        assert not service.held_version   # was cleared
         # A new version was created in the db
         assert len(service.versions) == 1
         assert service.versions[0].definition == canonical_definition('bar', {})[1]
@@ -62,7 +62,8 @@ class TestAppPlugin(object):
         deployment = host.create_deployment('foo')
         host.set_globals('foo', {'a': 1})
         service = deployment.set_service('bar')
-        version = service.append_version(canonical_definition('bar', {})[1])
+        version = service.append_version(
+            service.derive(canonical_definition('bar', {})[1]))
         version.app_version_id = 3
 
         host.provide_data(
@@ -83,7 +84,8 @@ class TestAppPlugin(object):
         deployment = host.create_deployment('foo')
         host.set_globals('foo', {'a': 1})
         service = deployment.set_service('bar')
-        version = service.append_version(canonical_definition('bar', {})[1])
+        version = service.append_version(
+            service.derive(canonical_definition('bar', {})[1]))
         version.app_version_id = 3
 
         service = host.set_service('foo', 'bar', {'git': '.'})
