@@ -16,15 +16,16 @@ class Context(object):
 
     def custom(self, **obj):
         self.queue.put(obj)
+        gevent.sleep(0)
 
     def job(self, name):
-        self.queue.put({'job': name})
+        self.custom(job=name)
 
     def log(self, msg):
-        self.queue.put({'log': msg})
+        self.custom(log=msg)
 
     def error(self, msg):
-        self.queue.put({'error': msg})
+        self.custom(error=msg)
 
     def fatal(self, msg):
         self.error(msg)

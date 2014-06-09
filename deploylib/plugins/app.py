@@ -4,6 +4,7 @@ import tempfile
 
 from . import Plugin, LocalPlugin
 from deploylib.daemon.context import ctx
+from deploylib.daemon.host import DeployError
 
 
 class LocalAppPlugin(LocalPlugin):
@@ -131,13 +132,26 @@ class AppPlugin(Plugin):
         #    environment=env,
         #    volumes={cache_dir: '/tmp/cache:rw'})
         builder_image = os.environ.get('SLUGBUILDER', 'flynn/slugbuilder')
-        result = subprocess.check_output(
-            'cat {} | docker run -u root -v {cache}:/tmp/cache:rw {env} -i -a stdin '
-            '-a stdout {image} {outuri}'.format(
+
+        cmd = ('cat {} | docker run -u root -v {cache}:/tmp/cache:rw {env} -i -a stdin '
+              '-a stdout {image} {outuri}'.format(
                 filename, outuri=slug_url, cache=cache_dir,
                 image=builder_image,
-                env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()])), shell=True)
-        container_id = result.strip()
+                env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()])))
+        build_process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
+
+        line = build_process.stdout.readline()
+        while line:
+            if line.startswith('\x1b'):
+                # There is some type of shell code at the beginning, and
+                # it somehow prevents indentation.
+                line = line[4:]
+            ctx.log(line.strip())
+            line = build_process.stdout.readline()
+
+        if build_process.returncode:
+            raise DeployError('the build failed with code %s' % build_process.returncode)
 
     def _get_slug_url(self, service, slug_name):
         # Put together an full url for a slug
