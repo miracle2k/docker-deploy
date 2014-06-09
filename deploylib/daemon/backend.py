@@ -125,3 +125,32 @@ class DockerOnlyBackend(object):
         )
         container_id = result['Id']
         return container_id
+
+
+class UpstartBackend(DockerOnlyBackend):
+
+    def start(self, runcfg, instance_id):
+        self.write_upstart_file(runcfg)
+        return DockerOnlyBackend.start(self, runcfg, instance_id)
+
+    def write_upstart_file(self, runcfg):
+        template = \
+"""
+description "{name}"
+author "docker-deploy"
+start on filesystem and started docker
+stop on runlevel [!2345]
+respawn
+script
+  /usr/bin/docker start -a {name}
+end script
+"""
+        content = template.format(name=runcfg['name'])
+
+        filename = os.path.join(
+            os.environ.get('UPSTART_DIR', '/etc/init'),
+            runcfg['name'])
+        with open(filename, 'w') as f:
+            f.write(content)
+
+

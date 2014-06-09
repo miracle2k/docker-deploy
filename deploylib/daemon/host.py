@@ -7,7 +7,7 @@ import random
 import netifaces
 import ZODB
 import ZODB.FileStorage
-from deploylib.daemon.backend import DockerOnlyBackend
+from deploylib.daemon.backend import DockerOnlyBackend, UpstartBackend
 from deploylib.daemon.db import DeployDB, Deployment
 from .context import ctx
 
@@ -196,7 +196,7 @@ class DockerHost(LocalMachineImplementation):
             DomainPlugin(self),
             SdutilPlugin(self)]
 
-        self.backend = DockerOnlyBackend(docker_url)
+        self.backend = UpstartBackend(docker_url)
 
     def run_plugins(self, method_name, *args, **kwargs):
         for plugin in self.plugins:
