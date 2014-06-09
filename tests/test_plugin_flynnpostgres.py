@@ -8,7 +8,7 @@ class TestFlynnPostgres(object):
         containers have been installed for the first time.
         """
         # Mock flynn-postgres-api container
-        responses.add(responses.POST, 'http://abc/databases',
+        responses.add(responses.POST, 'http://abc-api/databases',
                   body=json.dumps({'env': {'PGDATABASE': 1, 'PGUSER': 2,
                                            'PGPASSWORD': 3}}), status=200,
                   content_type='application/json')
