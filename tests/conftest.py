@@ -16,18 +16,36 @@ def host(request, tmpdir):
         volumes_dir=str(tmpdir.mkdir('volumes')),
         db_dir=str(tmpdir.join('db')))
 
-    # Mock any backend calls
-    host.backend = mock.Mock()
-    host.backend.prepare.return_value = 'abc'
-    host.backend.start.return_value = 'abc'
+    # By default we mock the whole backend. However, the test module
+    # can disable this.
+    if getattr(request.module, "mock_backend", True):
+        host.backend = mock.Mock()
+        host.backend.prepare.return_value = 'abc'
+        host.backend.start.return_value = 'abc'
+
     # Test version of discovery client
     host.discover = lambda s: s
+
+    # Remove the upstart plugin - in the future we should enable plugins
+    # for tests on an as-need basis.
+    os.environ['UPSTART_DIR'] = tmpdir.join('upstart').mkdir().strpath
 
     def close():
         transaction.commit()
         host.close()
     request.addfinalizer(close)
     return host
+
+
+@pytest.fixture()
+def mock_backend_docker(host):
+    """Most backends have a .client attribute that is the Docker client.
+
+    This will mock out the calls to Docker. It can be used as an alternative
+    to mocking the whole backend.
+    """
+    host.backend.client = mock.Mock()
+    host.backend.client.create_container.return_value = {'Id': 'abc'}
 
 
 @pytest.fixture()
@@ -47,7 +65,10 @@ def envsetup(request):
     """Mock out various other things."""
 
     # Make sure there is always a context available
-    set_context(Context())
+    class TestContext(Context):
+        def custom(self, **kwargs):
+            print(kwargs)
+    set_context(TestContext())
 
     def end(): pass
     request.addfinalizer(end)

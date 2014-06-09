@@ -206,13 +206,15 @@ def init_host():
     from deploylib.client.service import ServiceFile
     servicefile = ServiceFile.load(path(dirname(__file__), 'Bootstrap'), ordered=True)
 
-    def namer(service):
+    def namer(service, version, definition):
         # Give the bootstrap services simple accessible names, without
         # attaching ids, deployment id etc. "etcd" vs "sys-etcd-fe438e".
         return service.name
     for name, service in servicefile.services.items():
         g.host.set_service(
             '', name, service, namer=namer, force=True)
+
+    g.host.run_plugins('on_system_init')
 
 
 app = Flask(__name__)

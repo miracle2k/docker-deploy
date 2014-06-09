@@ -45,10 +45,10 @@ class Backend(object):
     every time the instance comes up.
     """
 
-    def prepare(self, runcfg):
+    def prepare(self, service, runcfg):
         pass
 
-    def start(self, runcfg, instance_id=None):
+    def start(self, service, runcfg, instance_id=None):
         raise NotImplementedError()
 
     def terminate(self, instance_id):
@@ -70,7 +70,7 @@ class DockerOnlyBackend(object):
         self.client = docker.Client(
             base_url=docker_url, version='1.6', timeout=10)
 
-    def prepare(self, runcfg):
+    def prepare(self, service, runcfg):
         cid = self.create_container(runcfg)
 
         # Make sure the volumes exist
@@ -80,7 +80,7 @@ class DockerOnlyBackend(object):
 
         return cid
 
-    def start(self, runcfg, instance_id):
+    def start(self, service, runcfg, instance_id):
         self.client.start(
             runcfg['name'],
             binds=runcfg['volumes'],
@@ -125,32 +125,3 @@ class DockerOnlyBackend(object):
         )
         container_id = result['Id']
         return container_id
-
-
-class UpstartBackend(DockerOnlyBackend):
-
-    def start(self, runcfg, instance_id):
-        self.write_upstart_file(runcfg)
-        return DockerOnlyBackend.start(self, runcfg, instance_id)
-
-    def write_upstart_file(self, runcfg):
-        template = \
-"""
-description "{name}"
-author "docker-deploy"
-start on filesystem and started docker
-stop on runlevel [!2345]
-respawn
-script
-  /usr/bin/docker start -a {name}
-end script
-"""
-        content = template.format(name=runcfg['name'])
-
-        filename = os.path.join(
-            os.environ.get('UPSTART_DIR', '/etc/init'),
-            runcfg['name'] + '.conf')
-        with open(filename, 'w') as f:
-            f.write(content)
-
-

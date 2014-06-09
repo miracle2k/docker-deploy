@@ -7,7 +7,7 @@ import random
 import netifaces
 import ZODB
 import ZODB.FileStorage
-from deploylib.daemon.backend import DockerOnlyBackend, UpstartBackend
+from deploylib.plugins.upstart import UpstartBackend
 from deploylib.daemon.db import DeployDB, Deployment
 from .context import ctx
 
@@ -153,7 +153,8 @@ class LocalMachineImplementation(object):
             if fail:
                 raise ValueError('Instance %s already exists.' % deploy_id)
             return False
-        self.db.deployments[deploy_id] = Deployment(deploy_id)
+        self.db.deployments[deploy_id] = dep = Deployment(deploy_id)
+        self.run_plugins('on_create_deployment', dep)
         return self.db.deployments[deploy_id]
 
     def set_globals(self, deploy_id, globals):
@@ -188,13 +189,16 @@ class DockerHost(LocalMachineImplementation):
         from deploylib.plugins.flynn_postgres import FlynnPostgresPlugin
         from deploylib.plugins.wait import WaitPlugin
         from deploylib.plugins.setup_require import RequiresPlugin
+        from deploylib.plugins.upstart import UpstartPlugin
         self.plugins = [
             WaitPlugin(self),
             RequiresPlugin(self),
             AppPlugin(self),
             FlynnPostgresPlugin(self),
             DomainPlugin(self),
-            SdutilPlugin(self)]
+            SdutilPlugin(self),
+            UpstartPlugin(self),
+        ]
 
         self.backend = UpstartBackend(docker_url)
 
@@ -239,7 +243,7 @@ class DockerHost(LocalMachineImplementation):
         service = deployment.set_service(name)
         version = service.derive(definition)
 
-        self.setup_version(service, version)
+        self.setup_version(service, version, **kwargs)
         return service
 
     def setup_version(self, service, version, **kwargs):
@@ -365,7 +369,7 @@ class DockerHost(LocalMachineImplementation):
         # Construct a name; for now, for informative purposes only; later
         # this might be what we use for matching.
         if namer:
-            runcfg['name'] = namer(definition)
+            runcfg['name'] = namer(service, version, definition)
         else:
             runcfg['name'] = "{deploy}-{service}-{version}-{instance}".format(
                 deploy=deployment.id, service=service.name,
@@ -384,7 +388,7 @@ class DockerHost(LocalMachineImplementation):
                            for k, v in runcfg['env'].items()}
 
         # Create the new container
-        instance_id = self.backend.prepare(runcfg)
+        instance_id = self.backend.prepare(service, runcfg)
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
@@ -394,7 +398,7 @@ class DockerHost(LocalMachineImplementation):
             service.instances.remove(inst)
 
         # Run the container
-        instance_id = self.backend.start(runcfg, instance_id)
+        instance_id = self.backend.start(service, runcfg, instance_id)
 
         service.append_version(version)
         service.append_instance(instance_id)

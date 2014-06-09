@@ -101,6 +101,7 @@ class DeployedService(Persistent):
         if self.held:
             self._remove_hold()
 
+        version.service = self
         self.versions.append(version)
         return version
 
