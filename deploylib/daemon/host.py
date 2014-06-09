@@ -369,7 +369,7 @@ class DockerHost(LocalMachineImplementation):
         else:
             runcfg['name'] = "{deploy}-{service}-{version}-{instance}".format(
                 deploy=deployment.id, service=service.name,
-                version=len(service.versions),
+                version=len(service.versions)+1,
                 instance=service.latest.instance_count if service.latest else 1)
 
         # We are almost ready, let plugins do some final modifications
