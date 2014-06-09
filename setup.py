@@ -24,6 +24,9 @@ setup(
         'pyyaml>=3.11',
         'gevent>=0.6.1',
         'clint>=0.3.7',
+        'transaction>=1.4.3',
+        'ZODB>=4.0.0',
+        'docopt>=0.6.1',
     ],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
