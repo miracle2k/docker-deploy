@@ -217,6 +217,7 @@ def run():
         with app.app_context():
             g.host = connect()
             g.host.db.auth_key = auth_key
+            set_context(Context())
             g.host.create_deployment('', fail=False)
             init_host()
         return
