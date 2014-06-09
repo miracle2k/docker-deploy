@@ -209,6 +209,12 @@ class DockerHost(LocalMachineImplementation):
         else:
             return False
 
+    def get_plugin(self, klass):
+        for plugin in self.plugins:
+            if isinstance(plugin, klass):
+                return plugin
+        raise IndexError(klass)
+
     def set_service(self, deploy_id, name, definition, force=False, **kwargs):
         """Add a service to the deployment, or replace the existing
         service with a changed definition.

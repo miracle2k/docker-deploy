@@ -10,10 +10,8 @@ import ConfigParser
 import click
 import requests
 from clint.textui import puts, indent, colored
-
-from deploylib.plugins.app import LocalAppPlugin
+from deploylib.plugins import load_plugins, LocalPlugin
 from deploylib.client.service import ServiceFile
-from deploylib.plugins.domains import LocalDomainPlugin
 
 
 class Api(object):
@@ -57,6 +55,10 @@ class Api(object):
         data = response.json()
         return data
 
+    def plugin(self, method, plugin_name, func, **kwargs):
+        return self.request(
+            'get', '%s/%s' % (plugin_name, func), json=kwargs)
+
     def list(self):
         return self.request('get', 'list')
 
@@ -77,10 +79,7 @@ class Api(object):
             'data': json.dumps(data)}, stream=True)
 
 
-PLUGINS = [
-    LocalAppPlugin(),
-    LocalDomainPlugin()
-]
+PLUGINS = load_plugins(LocalPlugin)
 
 def run_plugins(method_name, *args, **kwargs):
     for plugin in PLUGINS:
@@ -160,6 +159,9 @@ class App(object):
 
         self.api = Api(deploy_url, auth)
 
+    def plugin_call(self, method, plugin, func, kwargs):
+        single_result(self.api.plugin(method, plugin, func, **kwargs))
+
 
 @click.group()
 @click.pass_context
@@ -231,6 +233,10 @@ def add_server(app, name, url, auth):
     app.config.set('server "%s"' % name, 'url', url)
     app.config.set('server "%s"' % name, 'auth', auth)
     app.config.save()
+
+
+# Let plugins add more commands.
+run_plugins('provide_cli', main)
 
 
 def run():

@@ -1,3 +1,6 @@
+from functools import wraps
+
+
 class Plugin(object):
     """Plugin that runs on the server.
 
@@ -39,3 +42,41 @@ class Plugin(object):
 
 class LocalPlugin(object):
     """Plugin that runs on the client."""
+
+
+def load_plugins(klass, *args, **kwargs):
+    """Search all plugin modules for subclasses of ``klass``,
+    instantiate using ``args`` and ``kwargs``, return as list.
+
+    TODO: consider stevedore.
+    """
+    import os
+    from os import path
+    import warnings
+    import inspect
+    from importlib import import_module
+
+    result = []
+    current_dir = path.dirname(__file__)
+    for name in os.listdir(current_dir):
+        if not name.endswith('.py'):
+            continue
+        name = path.splitext(name)[0]
+        module_name = 'deploylib.plugins.%s' % name
+        try:
+            module = import_module(module_name)
+        except Exception as e:
+            warnings.warn('Error while loading builtin plugin module '
+                          '\'%s\': %s' % (module_name, e))
+        else:
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if inspect.isclass(attr) and issubclass(attr, klass) and not \
+                        attr is klass:
+                    result.append(attr(*args, **kwargs))
+
+                if isinstance(attr, klass):
+                    result.append(attr)
+
+    return result
+

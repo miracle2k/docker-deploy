@@ -1,3 +1,4 @@
+from functools import wraps
 import json
 import os
 from os.path import join as path, dirname
@@ -9,6 +10,7 @@ import gevent
 import gevent.queue
 import gevent.monkey
 from .context import Context, set_context, ctx
+from deploylib.plugins import load_plugins
 from .host import DockerHost, DeployError
 
 
@@ -23,11 +25,11 @@ def connect():
     )
 
 
-@api.before_request
+@api.before_app_request
 def before_request():
     g.host = connect()
 
-@api.teardown_request
+@api.teardown_app_request
 def after_request(exception):
     print("request done runs now...")
     if exception:
@@ -92,6 +94,22 @@ def process_in_greenlet(worker, *args, **kwargs):
             ctx.done()
     gevent.spawn(wrapped)
     return ctx
+
+
+def json_method(f):
+    """Decorator for a flask view that will expand all json keys
+    to keyword arguments.
+    """
+    @wraps(f)
+    def decorated_function():
+        kwargs = request.json
+        if kwargs is None:
+            kwargs = {}
+        try:
+            return jsonify(f(**kwargs))
+        except TypeError, e:
+            return jsonify({'error': '%s' % e})
+    return decorated_function
 
 
 @api.route('/list')
@@ -200,6 +218,10 @@ def init_host():
 app = Flask(__name__)
 app.debug = True
 app.register_blueprint(api)
+
+# Let plugins contribute blueprints
+for blueprint in load_plugins(Blueprint):
+    app.register_blueprint(blueprint, url_prefix='/%s' % blueprint.name)
 
 
 def run():

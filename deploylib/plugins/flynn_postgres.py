@@ -65,10 +65,13 @@ containers can instead use "require" to reference the database defined.
 
 from subprocess import CalledProcessError
 import time
-from requests import ConnectionError
+from flask import Blueprint, g
 import requests
-
-from deploylib.plugins import Plugin
+from requests import ConnectionError
+import click
+from deploylib.daemon.api import json_method
+from deploylib.daemon.host import DeployError
+from deploylib.plugins import Plugin, LocalPlugin
 
 
 class FlynnPostgresPlugin(Plugin):
@@ -137,18 +140,57 @@ class FlynnPostgresPlugin(Plugin):
 
             try:
                 created = requests.post(httpurl).json()
-            except (ConnectionError):
+            except (ConnectionError,):
                 time.sleep(1)
             else:
-                data[dbid] = {}
-                data[dbid]['dbname'] = created['env']['PGDATABASE']
-                data[dbid]['user'] = created['env']['PGUSER']
-                data[dbid]['password'] = created['env']['PGPASSWORD']
+                self.write_connection_data(
+                    deployment, dbid, created['env']['PGDATABASE'],
+                    created['env']['PGUSER'], created['env']['PGPASSWORD'])
                 break
 
         else:
-            raise EnvironmentError(
+            raise DeployError(
                 "Cannot find flynn-postgres API: %s" % discovery_name)
 
+    def write_connection_data(self, deployment, dbid, dbname, user, password):
+        data = deployment.data.setdefault('flynn-postgres', {})
+        data[dbid] = {}
+        data[dbid]['dbname'] = dbname
+        data[dbid]['user'] = user
+        data[dbid]['password'] = password
 
 
+flynn_postgres_api = Blueprint('flynn-postgres', __name__)
+
+@flynn_postgres_api.route('/init', methods=['GET'])
+@json_method
+def api_init(deployment, dbid, database, user, password):
+    """API to set the database configuration manually, for example
+    when migrating from another installation.
+    """
+    deployment = g.host.db.deployments[deployment]
+    g.host.get_plugin(FlynnPostgresPlugin).write_connection_data(
+        deployment, dbid, database, user, password
+    )
+    return {'job': 'Setting flynn-postgres connection info'}
+
+
+@click.command('flynn-postgres')
+@click.argument('deployment')
+@click.argument('dbid')
+@click.argument('database')
+@click.argument('user')
+@click.argument('password')
+@click.pass_obj
+def flynn_postgres(app, **kwargs):
+    """Manually set flynn-postgres database info.
+    """
+    app.plugin_call('get', 'flynn-postgres', 'init', kwargs)
+
+
+class LocalFlynnPostgresPlugin(LocalPlugin):
+    """Provide a local command to control the plugin.
+    """
+
+    def provide_cli(self, group):
+        group.add_command(flynn_postgres)
