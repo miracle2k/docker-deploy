@@ -149,7 +149,7 @@ end script
 
         filename = os.path.join(
             os.environ.get('UPSTART_DIR', '/etc/init'),
-            runcfg['name'])
+            runcfg['name'] + '.conf')
         with open(filename, 'w') as f:
             f.write(content)
 
