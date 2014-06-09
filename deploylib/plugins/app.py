@@ -138,6 +138,7 @@ class AppPlugin(Plugin):
                 filename, outuri=slug_url, cache=cache_dir,
                 image=builder_image,
                 env=' '.join(['-e %s="%s"' % (k, v) for k, v in env.items()])))
+
         build_process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
 

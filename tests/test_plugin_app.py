@@ -1,6 +1,24 @@
+from io import BytesIO
 import subprocess
+import mock
+import pytest
 from werkzeug.datastructures import FileStorage
 from deploylib.daemon.host import canonical_definition
+
+
+@pytest.fixture(autouse=True)
+def patch_build(request):
+    # Mock subprocess calls used by container build
+    fake_popen = mock.NonCallableMagicMock()
+    fake_popen.stdout = BytesIO("foo")
+    fake_popen.returncode = 0
+    subprocess_patcher = mock.patch(
+        "subprocess.Popen", side_effect=[fake_popen])
+    subprocess_patcher.start()
+
+    def end():
+        subprocess_patcher.stop()
+    request.addfinalizer(end)
 
 
 class TestAppPlugin(object):
@@ -43,8 +61,8 @@ class TestAppPlugin(object):
             'foo', 'bar',  {'app': FileStorage()}, {'app': {'version': 42}})
 
         # docker build was called
-        assert len(subprocess.check_output.mock_calls) == 1
-        assert 'http://shelf' in subprocess.check_output.mock_calls[0][1][0]
+        assert len(subprocess.Popen.mock_calls) == 1
+        assert 'http://shelf' in subprocess.Popen.mock_calls[0][1][0]
         # Service no longer held
         assert not service.held
         assert not service.held_version   # was cleared
@@ -70,8 +88,8 @@ class TestAppPlugin(object):
             'foo', 'bar',  {'app': FileStorage()}, {'app': {'version': 99}})
 
         # Another slug was built
-        assert len(subprocess.check_output.mock_calls) == 1
-        assert 'http://shelf' in subprocess.check_output.mock_calls[0][1][0]
+        assert len(subprocess.Popen.mock_calls) == 1
+        assert 'http://shelf' in subprocess.Popen.mock_calls[0][1][0]
         # And deployed as a new version
         assert len(service.versions) == 2
         assert service.versions[0].definition ==service.versions[1].definition
@@ -91,7 +109,7 @@ class TestAppPlugin(object):
         service = host.set_service('foo', 'bar', {'git': '.', 'foo': 1})
 
         # No slug was built
-        assert len(subprocess.check_output.mock_calls) == 0
+        assert len(subprocess.Popen.mock_calls) == 0
         # But the new one was deployed as a new version
         assert len(service.versions) == 2
         assert service.versions[1].definition == \

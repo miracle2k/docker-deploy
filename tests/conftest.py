@@ -44,17 +44,10 @@ def responses(request):
 
 @pytest.fixture(autouse=True)
 def envsetup(request):
-    """Mock out various other things.
-    """
-    # Mock subprocess.check_output (used by container build)
-    def container_id(a, **kwargs): return 'container-id'
-    subprocess_patcher = mock.patch(
-        "subprocess.check_output", side_effect=container_id)
-    subprocess_patcher.start()
+    """Mock out various other things."""
 
     # Make sure there is always a context available
     set_context(Context())
 
-    def end():
-        subprocess_patcher.stop()
+    def end(): pass
     request.addfinalizer(end)
