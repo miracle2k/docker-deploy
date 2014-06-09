@@ -126,7 +126,7 @@ class FlynnPostgresPlugin(Plugin):
         # Determine the service discovery name of the API container.
         # This is a bit of a hack.
         api_service = deployment.services[dbcfg['via']]
-        discovery_name = api_service.latest.definition['env']['FLYNN_POSTGRES']
+        discovery_name = api_service.latest.definition['env']['FLYNN_POSTGRES'] + '-api'
         discovery_name = discovery_name.format(DEPLOY_ID=deployment.id)
 
         start = time.time()
@@ -158,6 +158,8 @@ class FlynnPostgresPlugin(Plugin):
         data[dbid]['dbname'] = dbname
         data[dbid]['user'] = user
         data[dbid]['password'] = password
+
+        # TODO: Can we trigger the require plugin now?
 
 
 flynn_postgres_api = Blueprint('flynn-postgres', __name__)
