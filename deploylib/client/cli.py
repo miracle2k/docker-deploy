@@ -55,8 +55,6 @@ class Api(object):
         if kwargs.get('stream'):
             return self._server_events(response)
         data = response.json()
-        if 'error' in data:
-            raise RuntimeError(data['error'])
         return data
 
     def list(self):
@@ -120,6 +118,13 @@ def print_jobs(event_stream):
         raise ValueError(event)
 
 
+def single_result(event):
+    error = event.get('error', False)
+    print_jobs([event])
+    if error:
+        raise click.ClickException('Aborted.')
+
+
 class Config(ConfigParser.ConfigParser):
 
     def __init__(self):
@@ -175,7 +180,8 @@ def deploy(app, service_file, deploy_id, create, force):
     service_file = ServiceFile.load(service_file, plugin_runner=run_plugins)
 
     if create:
-        print_jobs(api.create(deploy_id))
+        if single_result(api.create(deploy_id)):
+            return
 
     requested_uploads = []
     for event in with_printer(api.setup(deploy_id, service_file, force=force)):
