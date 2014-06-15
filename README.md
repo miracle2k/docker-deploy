@@ -1,67 +1,131 @@
-This is me trying to use docker.
+This is slowly becoming a usable docker-based deployment tool. 
 
-What I want
------------
+It's premise is that you define the set of services that together make up
+an application in a template, and you can then "roll out" one or multiple
+instances of the app (say production staging).
+ 
+Rather than communicating all pieces of configuration individually to the
+controller ala "heroku config:add", the service configuration is described
+in a YAML file.
 
-The key goal is to layout all the individual services an app requires in
-a YAML template, then deploy this template one, or multiple times (say
-live and staging).
+Design goals include:
 
-The template isn't concerned with the runtime configuration (like in
-maestro-ng). It doesn't know anything about servers or scaling settings.
-Conceptually, you'd interact directly with your cluster to make these
-types of changes.
+- For the templates to not become stale, they need to be the primary method
+  of deploying changes. The files and the process needs to be simple.
 
-But changes to the service configuration itself should be made through
-re-applying a new version of the template - or it would become stale.
-Updating the template needs to be the best and easiest way to change a
-deployed set of services.
+- The template only specifies the abstract service configuration, not
+  the infrastructure configuration (how many instances to scale to, on
+  which hosts to run them).
+
+- Enforce the use of service discovery. Each service is a self-contained
+  unit that can be treated without worrying about its dependencies. Make 
+  the rigorous use of service discovery as simple as possible.
+  
+  
+Implementing the concept
+------------------------
+
+Your template for your web app using a Postgres database and a redis cache
+might look like this:
+ 
+    mycompany/redis:
+    mycompany/postgres:
+    my-webapp:
+        git: .
+        
+
+Via ``./calzion deploy template.yaml myapp-staging``, this template would 
+simply be converted into the following API calls to a controller which
+needs to run only once for a cluster:
+    
+    create_deployment('myapp-staging')
+    set_service('myapp-staging, 'mycomp/redis',  {})    
+    set_service('myapp-staging, 'mycomp/web',  {'git': '.'})
+    set_service('myapp-staging, 'mycomp/postgres',  {})
+    
+
+Notice the ``set_service()`` calls are separate, and their order is 
+irrelevant.
+
+The controller starts the redis and postgres containers (on a random host
+by default). The special ``git`` key triggers a plugin that is responsible
+to support 12-factor style apps. The plugin might do the following:
+
+- Setup a git repository to push to for deployments.
+- Ask the client to upload the code.
+
+Once the application code has been provided, it can use ``flynn/slugbuilder``
+and ``flynn/slugrunner`` to deploy it as a docker container.
+
+The containers find each other because they have all registered with a 
+service discovery system, based on receiving the deployment name 
+``myapp-staging`` as an environment variable.
+
+The controller is written in Python, and can run in a container itself
+(convenient everywhere, necessary for i.e. CoreOS).
+  
+  
+The current state
+-----------------
+
+This is still very much a work in progress, but it is getting to a point
+where it might be usable.
+
+Currently:
+
+- Only works with a single host.
+- Has dependencies to a number of Flynn components hardcoded (etcd,
+  discoverd, strowger). There is no reason why this has to remain so.
+
+Since I care about the deploy-via-template part, and not so much about
+re-implementing a PaaS system, I'd rather defer the job of running the
+containers and keeping them up to a backend.
+
+Currently the controller creates the containers via the Docker API and writes
+upstart service files for them, but in the future, it might also support
+things like CoreOS fleet, or use flynn-host. 
 
 
-What it is right now
---------------------
+Getting started
+---------------
 
-It is *very much* a work in progress.
-
-- There is a controller your supposed to run on you your host
-  (I want to support multiple hosts later). It has a HTTP API.
-- There is a command line client reading the YAML templates.
-- The controller will use the Docker API to start containers.
-- Once a container is started, that is it. No monitoring etc.
-- The controller remembers a list of deployed applications and the
-  container ids of their services, so a template sync can replace them.
+(add setup instructions)
 
 
-What might happen in the future
--------------------------------
 
-I care about the template part, and don't care about re-implementing
-the PaaS part. In the future the controller might:
+Describing regular services
+---------------------------
 
-- Write out CoreOS fleet service files.
-- Use flynn-host to start services across a cluster, and act like a scheduler.
-- Go away, and the client might talk to flynn-controller directly.
-
-I'd also like to go one level up and define the actual deployed applications
-in a template, along with runtime data like domains being routed to the app
-or the backup options. This is to combine a system documentation with a tool
-to easily setup things like DNS and backups.
+(explain how a docker service is written in YAML, and global environment vars)
 
 
-My goals here
--------------
+12-factor apps
+--------------
+
+(introduce the "app" plugin).
 
 
-1. I want the language to describe containers to be at least as or easier
-   than running containers manually.
+Using service discovery
+-----------------------
 
-2. Once I've layed out the services required for an app, I want to be able
-   to easily run multiple instances of it (a staging version, or instances
-   for different customers).
+(introduce discoverd based service discovery plugins)
 
-3. There need to be facilities to work with an existing instance, i.e.
-   deploy a new version of the app or service.
 
-4. Base everything on service discovery rather than links. Running a container
-   with etcd is not hard, and by providing the right tools, doing this right
-   should not entail extra hardship (not there yet).
+Initializing databases
+----------------------
+
+(deal with the problem of setting up a database initially)
+
+
+Describing your infrastructure
+==============================
+
+(functionality that breaks out of the "define a web app in an re-usable way",
+ concept, like mapping a particular domain to a particular instance of the
+ app)
+
+
+Routing domains
+---------------
+
+(talk about plugins that can set up domain routing). 
