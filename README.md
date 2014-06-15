@@ -1,8 +1,8 @@
 This is slowly becoming a usable docker-based deployment tool. 
 
-It's premise is that you define the set of services that together make up
+Its premise is that you define the set of services that together make up
 an application in a template, and you can then "roll out" one or multiple
-instances of the app (say production staging).
+instances of the app (say production and staging).
  
 Rather than communicating all pieces of configuration individually to the
 controller ala "heroku config:add", the service configuration is described
