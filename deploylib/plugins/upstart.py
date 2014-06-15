@@ -74,7 +74,7 @@ class UpstartPlugin(Plugin):
         # Run etcd on boot, or when the control root service starts.
         etcd = """
 description "{name}"
-start (on filesystem and started docker) or starting docker-deploy
+start on (filesystem and started docker) or starting docker-deploy
 stop on runlevel [!2345] or stopping etcd
 respawn
 script
@@ -108,7 +108,7 @@ end script
         #   - When we start or stop this, we bring the whole system up or down.
         root = """
 description "docker-deploy"
-start on (started shelf and started strowger)
+start on (started etcd and started discoverd and started shelf and started strowger)
 stop on stopped etcd
 """
         write_upstart_conf('docker-deploy', root)
