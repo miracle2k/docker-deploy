@@ -198,25 +198,6 @@ def upload():
     return process_in_greenlet(worker, g.host, request.files)
 
 
-def init_host():
-    """
-    Initialize the host. Will make sure core services such as etcd
-    and discoverd are running as they should.
-    """
-    from deploylib.client.service import ServiceFile
-    servicefile = ServiceFile.load(path(dirname(__file__), 'Bootstrap'), ordered=True)
-
-    def namer(service, version, definition):
-        # Give the bootstrap services simple accessible names, without
-        # attaching ids, deployment id etc. "etcd" vs "sys-etcd-fe438e".
-        return service.name
-    for name, service in servicefile.services.items():
-        g.host.set_service(
-            '', name, service, namer=namer, force=True)
-
-    g.host.run_plugins('on_system_init')
-
-
 app = Flask(__name__)
 app.debug = True
 app.register_blueprint(api)
@@ -243,7 +224,7 @@ def run():
             g.host.db.auth_key = auth_key
             set_context(Context())
             g.host.create_deployment('', fail=False)
-            init_host()
+            g.host.run_plugins('on_system_init')
         return
 
     bind_opt = (result['<bind>'] or '0.0.0.0:5555').split(':', 1)

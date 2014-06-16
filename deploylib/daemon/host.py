@@ -188,8 +188,10 @@ class DockerHost(LocalMachineImplementation):
         from deploylib.plugins.sdutil import SdutilPlugin
         from deploylib.plugins.flynn_postgres import FlynnPostgresPlugin
         from deploylib.plugins.setup_require import RequiresPlugin
+        from deploylib.plugins.etcd_discoverd import DiscoverdEtcdPlugin
         from deploylib.plugins.upstart import UpstartPlugin
         self.plugins = [
+            DiscoverdEtcdPlugin(self),
             RequiresPlugin(self),
             AppPlugin(self),
             FlynnPostgresPlugin(self),
