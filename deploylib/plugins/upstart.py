@@ -78,6 +78,13 @@ start on (filesystem and started docker) or starting docker-deploy
 stop on runlevel [!2345] or stopping etcd
 respawn
 script
+  # It would appear "started docker" does not mean docker is
+  # actually ready, so wait first until it is.
+  FILE=/var/run/docker.sock
+  while [ ! -e $FILE ] ; do
+    inotifywait -t 2 -e create $(dirname $FILE)
+  done
+  sleep 1
   /usr/bin/docker start -a {name}
 end script
 """
@@ -89,6 +96,10 @@ start on started {dep}
 stop on stopping {dep}
 respawn
 script
+  # upstarts "started" dependencies apparently trigger before the docker
+  # daemon has actually had a change to start the container, so wait
+  # for a bit first.
+  sleep 2
   /usr/bin/docker start -a {name}
 end script
 """
