@@ -128,6 +128,9 @@ stop on stopped etcd
         """This is an abstract service that is used as a "start on"
         "stop on" hook for every service in this deployment.
         """
+        if not deployment.id:
+            # The system deployment.
+            return
         template = """
 description "{name}"
 author "docker-deploy"
