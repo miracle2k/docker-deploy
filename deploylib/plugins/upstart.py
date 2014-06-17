@@ -24,6 +24,12 @@ def write_upstart_conf(name, template, **kwargs):
         f.write(template.format(name=name, **kwargs))
 
 
+def rm_upstart_conf(name):
+    filename = os.path.join(
+        os.environ.get('UPSTART_DIR', '/etc/init'), name + '.conf')
+    os.unlink(filename)
+
+
 class UpstartBackend(DockerOnlyBackend):
     """Create upstart files along with docker containers.
     """
@@ -31,6 +37,10 @@ class UpstartBackend(DockerOnlyBackend):
     def start(self, service, runcfg, instance_id):
         self.write_upstart_for_service(service.deployment, runcfg)
         return DockerOnlyBackend.start(self, service, runcfg, instance_id)
+
+    def terminate(self, (instance_id, name)):
+        rm_upstart_conf(name)
+        return DockerOnlyBackend.terminate(self, (instance_id, name))
 
     def write_upstart_for_service(self, deployment, runcfg):
         # Upstart file for an individual service. Linked to start

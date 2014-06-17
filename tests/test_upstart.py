@@ -22,7 +22,12 @@ class TestUpstart(object):
         assert upstart.join('foo.conf').exists()
 
     def test_create_service_file(self, host, upstart):
-        """An upstart file is created for each service."""
+        """An upstart file is created for each service, and deleted.
+        """
         host.create_deployment('foo')
         host.set_service('foo', 'bar', {})
         assert upstart.join('foo-bar-1-1.conf').exists()
+
+        host.set_service('foo', 'bar', {}, force=True)
+        assert upstart.join('foo-bar-2-1.conf').exists()
+        assert not upstart.join('foo-bar-1-1.conf').exists()

@@ -86,9 +86,9 @@ class DockerOnlyBackend(object):
             binds=runcfg['volumes'],
             port_bindings=runcfg['ports'],
             privileged=runcfg['privileged'])
-        return instance_id
+        return instance_id, runcfg['name']
 
-    def terminate(self, instance_id):
+    def terminate(self, (instance_id, name)):
         try:
             self.client.stop(instance_id, 10)
         except:

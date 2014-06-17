@@ -401,7 +401,7 @@ class DockerHost(LocalMachineImplementation):
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
         for inst in service.instances:
-            ctx.log("Killing existing container %s" % inst.container_id)
+            ctx.log("Killing existing container %s" % inst.container_id[1])
             self.backend.terminate(inst.container_id)
             service.instances.remove(inst)
 
@@ -410,4 +410,4 @@ class DockerHost(LocalMachineImplementation):
 
         service.append_version(version)
         service.append_instance(instance_id)
-        ctx.log("New instance id is %s" % instance_id)
+        ctx.log("New instance id is %s" % instance_id[0])
