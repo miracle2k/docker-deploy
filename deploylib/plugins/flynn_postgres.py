@@ -63,7 +63,6 @@ run externally (so the plugin can just assume they are running), and
 containers can instead use "require" to reference the database defined.
 """
 
-from subprocess import CalledProcessError
 import time
 from flask import Blueprint, g
 import requests
@@ -71,7 +70,7 @@ from requests import ConnectionError
 import click
 from deploylib.daemon.api import json_method
 from deploylib.daemon.context import ctx
-from deploylib.daemon.host import DeployError
+from deploylib.daemon.host import DeployError, ServiceDiscoveryError
 from deploylib.plugins import Plugin, LocalPlugin
 
 
@@ -135,7 +134,7 @@ class FlynnPostgresPlugin(Plugin):
             try:
                 httpurl = 'http://%s/databases' % self.host.discover(
                     discovery_name)
-            except (CalledProcessError, ConnectionError):
+            except (ServiceDiscoveryError, ConnectionError):
                 time.sleep(1)
                 continue
 

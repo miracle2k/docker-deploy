@@ -20,6 +20,10 @@ class DeployError(Exception):
     """
 
 
+class ServiceDiscoveryError(DeployError):
+    pass
+
+
 def normalize_port_mapping(s):
     """Given a port mapping, return a 2-tuple (ip, port).
 
@@ -136,7 +140,7 @@ class LocalMachineImplementation(object):
             return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
                 self.get_host_ip(), servicename), shell=True).strip()
         except CalledProcessError as e:
-            raise DeployError(e)
+            raise ServiceDiscoveryError(e)
 
     def cache(self, *names):
         """Return a cache path. Same path for same name.
