@@ -6,8 +6,7 @@
 
 set -e
 
-#UPSTART_DIR="/etc/init"
-UPSTART_DIR="./upstart"
+UPSTART_DIR="/etc/init"
 
 
 if [ -n "$1" ]; then
@@ -15,8 +14,12 @@ if [ -n "$1" ]; then
     # http://unix.stackexchange.com/a/20823/20509
     ip=$(resolveip -s $1)
 else
-    # This will only work on OSX
-    ip=$(ifconfig | grep -A 1 'en0' | tail -1 | cut -d ' ' -f 2)
+    ip=$(ifconfig | grep -A 1 'docker0' | tail -1 | cut -d ':' -f 2 | cut -d ' ' -f 1)
+fi
+
+if [ -n "ip" ]; then
+    echo "Did not find host IP to use"
+    exit 1
 fi
 
 
@@ -24,7 +27,7 @@ fi
 cat > $UPSTART_DIR/etcd.conf <<EOF
 description "etcd"
 start on (filesystem and started docker)
-stop on runlevel [!2345]
+stop on runlevel [!2345] or stopping docker
 respawn
 script
   # It would appear "started docker" does not mean docker is
@@ -34,7 +37,7 @@ script
     inotifywait -t 2 -e create \$(dirname $FILE)
   done
   sleep 1
-  docker run --rm --name -p 4001:4001 -p 7001:7001 etcd coreos/etcd -name local -data-dir /srv/etcd -bind-addr=0.0.0.0:4001 --peer-addr=$ip:7001
+  docker run --rm --name etcd -p $ip:4001:4001 -p $ip:7001:7001 coreos/etcd -name local -data-dir /srv/etcd -bind-addr=0.0.0.0:4001 --peer-addr=$ip:7001
 end script
 EOF
 
@@ -44,7 +47,7 @@ start on started etcd
 stop on stopping etcd
 respawn
 script
-    docker run --rm --name discoverd -p 1111:1111 -e EXTERNAL_IP=$ip flynn/discoverd -etcd http://$ip:4001
+    docker run --rm --name discoverd -p $ip:1111:1111 -e EXTERNAL_IP=$ip flynn/discoverd -etcd http://$ip:4001
 end script
 EOF
 
