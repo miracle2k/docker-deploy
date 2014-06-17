@@ -26,12 +26,3 @@ class TestUpstart(object):
         host.create_deployment('foo')
         host.set_service('foo', 'bar', {})
         assert upstart.join('foo-bar-1-1.conf').exists()
-
-    def test_system_init(self, host, upstart):
-        # Call the event handler directly, easiest for testing
-        host.get_plugin(UpstartPlugin).on_system_init()
-        assert upstart.join('etcd.conf').exists()
-        assert upstart.join('discoverd.conf').exists()
-        assert upstart.join('shelf.conf').exists()
-        assert upstart.join('strowger.conf').exists()
-        assert upstart.join('docker-deploy.conf').exists()

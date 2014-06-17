@@ -223,8 +223,9 @@ def run():
             g.host = connect()
             g.host.db.auth_key = auth_key
             set_context(Context())
-            g.host.create_deployment('', fail=False)
+            g.host.create_deployment('system', fail=False)
             g.host.run_plugins('on_system_init')
+            transaction.commit()
         return
 
     bind_opt = (result['<bind>'] or '0.0.0.0:5555').split(':', 1)

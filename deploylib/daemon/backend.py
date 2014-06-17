@@ -107,8 +107,11 @@ class DockerOnlyBackend(object):
             self.client.remove_container(runcfg['name'])
 
         # If the image does not exist yet, pull it
-        print "Pulling image %s" % runcfg['image']
-        print self.client.pull(runcfg['image'])
+        try:
+            self.client.inspect_image(runcfg['image'])
+        except docker.APIError:
+            print "Pulling image %s" % runcfg['image']
+            print self.client.pull(runcfg['image'])
 
         # Create the container
         print "Creating container %s" % runcfg['name']

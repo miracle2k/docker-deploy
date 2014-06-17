@@ -273,7 +273,7 @@ class DockerHost(LocalMachineImplementation):
         service = self.db.deployments[deploy_id].services[service_name]
         self.run_plugins('on_data_provided', service, files, info)
 
-    def create_container(self, service, version, namer=None):
+    def create_container(self, service, version):
         """Create the docker container that the service(-version) defines.
         """
 
@@ -313,7 +313,7 @@ class DockerHost(LocalMachineImplementation):
         # Construct the 'volumes' argument.
         for volume_name, volume_path in definition.get('volumes').items():
             host_path = path.join(
-                self.volume_base, deployment.id or '__sys__', service.name, volume_name)
+                self.volume_base, deployment.id, service.name, volume_name)
             runcfg['volumes'][host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
@@ -368,13 +368,10 @@ class DockerHost(LocalMachineImplementation):
 
         # Construct a name; for now, for informative purposes only; later
         # this might be what we use for matching.
-        if namer:
-            runcfg['name'] = namer(service, version, definition)
-        else:
-            runcfg['name'] = "{deploy}-{service}-{version}-{instance}".format(
-                deploy=deployment.id, service=service.name,
-                version=len(service.versions)+1,
-                instance=service.latest.instance_count if service.latest else 1)
+        runcfg['name'] = "{deploy}-{service}-{version}-{instance}".format(
+            deploy=deployment.id, service=service.name,
+            version=len(service.versions)+1,
+            instance=service.latest.instance_count if service.latest else 1)
 
         # We are almost ready, let plugins do some final modifications
         # before we are starting the container.

@@ -1,9 +1,19 @@
+"""This processes ``Domain`` by adding domain:service maps to the
+strowger HTTP router.
+
+It provides a ``setup-strowger`` command which will - currently - run one
+instance of strowger as part of the system deployment.
+"""
+
 import json
 import os
 from urlparse import urljoin
 from os.path import dirname, normpath, join as path, exists
+import click
 import requests
 from . import Plugin, LocalPlugin
+import yaml
+from deploylib.client.service import ServiceFile
 
 
 class StrowgerClient:
@@ -36,8 +46,34 @@ class StrowgerClient:
             'PUT', '/routes', {'type': 'http', 'config': route})
 
 
+STROWGER = \
+"""
+image: elsdoerfer/strowger
+cmd: -httpaddr=":{PORT_HTTP}" --httpsaddr=":{PORT_HTTPS}" --apiaddr=":{PORT_RPC}"
+ports: [http, https, rpc]
+host_ports: {http: "0.0.0.0:80", https: "0.0.0.0:443"}
+"""
+
+
+@click.command('setup-strowger')
+@click.pass_obj
+def setup_strowger(app, **kwargs):
+    """Run the strowger service.
+    """
+    from deploylib.client.cli import print_jobs
+    # I think I'd prefer this as being done by a special API view.
+    strowger_def = yaml.load(STROWGER)
+    servicefile = ServiceFile()
+    servicefile.globals = {}
+    servicefile.services = {'strowger': strowger_def}
+    print_jobs(app.api.setup('system', servicefile, force=True))
+
+
 class LocalDomainPlugin(LocalPlugin):
     """Resolve SSL cert paths."""
+
+    def provide_cli(self, group):
+        group.add_command(setup_strowger)
 
     def file_loaded(self, services, globals, filename=None):
         domains = globals.get('Domains', {})

@@ -1,6 +1,3 @@
-from functools import wraps
-
-
 class Plugin(object):
     """Plugin that runs on the server.
 

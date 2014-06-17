@@ -30,6 +30,9 @@ def host(request, tmpdir):
     # for tests on an as-need basis.
     os.environ['UPSTART_DIR'] = tmpdir.join('upstart').mkdir().strpath
 
+    # Host always has the system deployment
+    host.create_deployment('system', fail=False)
+
     def close():
         transaction.commit()
         host.close()

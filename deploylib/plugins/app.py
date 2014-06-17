@@ -1,8 +1,15 @@
+"""Runs 12-factor apps from git using flynn/slugrunner.
+
+Will automatically install flynn/shelf as part of tye system deployment to
+store compiled slugs.
+"""
+
 import os
 import subprocess
 import tempfile
 
 from . import Plugin, LocalPlugin
+import yaml
 from deploylib.daemon.context import ctx
 from deploylib.daemon.host import DeployError
 
@@ -45,6 +52,13 @@ class LocalAppPlugin(LocalPlugin):
             }
 
 
+SHELF = """
+image: elsdoerfer/shelf
+cmd: -s /var/lib/shelf
+volumes: {data: /var/lib/shelf}
+"""
+
+
 class AppPlugin(Plugin):
     """Will run a 12-factor style app.
     """
@@ -52,6 +66,11 @@ class AppPlugin(Plugin):
     def setup(self, service, version):
         if not 'git' in version.definition['kwargs']:
             return False
+
+        # If the shelf service has not yet been setup, do so now
+        if not 'shelf' in self.host.db.deployments['system'].services:
+            shelf_def = yaml.load(SHELF)
+            self.host.set_service('system', 'shelf', shelf_def, force=True)
 
         # If this service version has no slug id attached, hold it back
         # for now and ask the client to provide the code.

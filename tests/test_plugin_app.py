@@ -7,6 +7,13 @@ from deploylib.daemon.host import canonical_definition
 
 
 @pytest.fixture(autouse=True)
+def install_shelf(host):
+    # Pretend shelf is installed, so the plugin won't attempt to
+    # during tests, which makes counting mocked calls more confusing.
+    host.db.deployments['system'].services['shelf'] = True
+
+
+@pytest.fixture(autouse=True)
 def patch_build(request):
     # Mock subprocess calls used by container build
     fake_popen = mock.NonCallableMagicMock()
