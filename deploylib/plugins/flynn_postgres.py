@@ -70,6 +70,7 @@ import requests
 from requests import ConnectionError
 import click
 from deploylib.daemon.api import json_method
+from deploylib.daemon.context import ctx
 from deploylib.daemon.host import DeployError
 from deploylib.plugins import Plugin, LocalPlugin
 
@@ -109,10 +110,8 @@ class FlynnPostgresPlugin(Plugin):
             self.setup_database(deployment, service, dbid, dbcfg)
 
     def setup_database(self, deployment, service, dbid, dbcfg):
-        data = deployment.data.setdefault('flynn-postgres', {})
-
         # Has this database already been setup? We don't need to anything
-        if dbid in data:
+        if deployment.get_resource(dbid):
             return
 
         # We go into action once the second of the pg and pg-api
@@ -122,6 +121,8 @@ class FlynnPostgresPlugin(Plugin):
         if not dbcfg['in'] in deployment.services or not \
                 dbcfg['via'] in deployment.services:
             return
+
+        ctx.job("Setting up flynn-postgres database resource: %s" % dbid)
 
         # Determine the service discovery name of the API container.
         # This is a bit of a hack.
@@ -143,7 +144,7 @@ class FlynnPostgresPlugin(Plugin):
             except (ConnectionError,):
                 time.sleep(1)
             else:
-                self.write_connection_data(
+                self.set_db_resource(
                     deployment, dbid, created['env']['PGDATABASE'],
                     created['env']['PGUSER'], created['env']['PGPASSWORD'])
                 break
@@ -152,14 +153,9 @@ class FlynnPostgresPlugin(Plugin):
             raise DeployError(
                 "Cannot find flynn-postgres API: %s" % discovery_name)
 
-    def write_connection_data(self, deployment, dbid, dbname, user, password):
-        data = deployment.data.setdefault('flynn-postgres', {})
-        data[dbid] = {}
-        data[dbid]['dbname'] = dbname
-        data[dbid]['user'] = user
-        data[dbid]['password'] = password
-
-        # TODO: Can we trigger the require plugin now?
+    def set_db_resource(self, deployment, dbid, dbname, user, password):
+        self.host.set_resource(deployment.id, dbid,
+            {'dbname': dbname, 'user': user, 'password': password})
 
 
 flynn_postgres_api = Blueprint('flynn-postgres', __name__)
@@ -171,7 +167,7 @@ def api_init(deployment, dbid, database, user, password):
     when migrating from another installation.
     """
     deployment = g.host.db.deployments[deployment]
-    g.host.get_plugin(FlynnPostgresPlugin).write_connection_data(
+    g.host.get_plugin(FlynnPostgresPlugin).set_db_resource(
         deployment, dbid, database, user, password
     )
     return {'job': 'Setting flynn-postgres connection info'}

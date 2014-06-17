@@ -34,24 +34,38 @@ class RequiresPlugin(Plugin):
         deployment = service.deployment
 
         # Make sure all requirements are available
+        missing_deps = []
         for dep in requirements:
-            if not dep in deployment.services:
-                break
-            if deployment.services[dep].held:
-                break
-        else:
-            # Yes they are, go ahead
-            return
+            if dep in deployment.resources:
+                continue
+            if dep in deployment.services:
+                if not deployment.services[dep].held:
+                    continue
 
-        # No they are not, hold this service for now
-        service.hold('waiting for requirement: %s' % dep, version)
-        return True
+            missing_deps.append(dep)
+
+        if missing_deps:
+            # No they are not, hold this service for now
+            service.hold(
+                'waiting for requirement(s): %s' % ', '.join(missing_deps),
+                version)
+            return True
+
+        # Yes they are, go ahead
+        return
 
     def post_setup(self, service, _):
-        """Search for any service that has been held due to lack of
-        this service that has just been set up.
+        if not service.held:
+            self.trigger_dependency(service.deployment, service.name)
+
+    def on_resource_changed(self, deployment, name, data):
+        self.trigger_dependency(deployment, name)
+
+    def trigger_dependency(self, deployment, depname):
+        """Search for any service that has been held due to lack of the
+        given requirement.
         """
-        for existing_service in service.deployment.services.values():
+        for existing_service in deployment.services.values():
             if not existing_service.held:
                 continue
 
@@ -62,8 +76,9 @@ class RequiresPlugin(Plugin):
             if not reqs:
                 continue
 
-            if service.name in reqs:
+            if depname in reqs:
                 # Attempt to setup this service now (which will recursively
                 # trigger this plugin again if there are complex deps).
-                print('Dependency for held service %s now available' % existing_service.name)
+                print('Dependency for held service %s now available' %
+                      existing_service.name)
                 self.host.setup_version(existing_service, version)

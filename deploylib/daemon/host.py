@@ -273,6 +273,13 @@ class DockerHost(LocalMachineImplementation):
         service = self.db.deployments[deploy_id].services[service_name]
         self.run_plugins('on_data_provided', service, files, info)
 
+    def set_resource(self, deploy_id, name, data):
+        """Declare the given resource to be available.
+        """
+        deployment = self.db.deployments[deploy_id]
+        is_new = deployment.set_resource(name, data)
+        self.run_plugins('on_resource_changed', deployment, name, data)
+
     def create_container(self, service, version):
         """Create the docker container that the service(-version) defines.
         """

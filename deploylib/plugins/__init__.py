@@ -6,6 +6,9 @@ class Plugin(object):
     on_globals_changed()
         Global data of a deployment has changed.
 
+    on_resource_changed
+        A resource was declared as available for this deployment.
+
     setup()
         Plugins can replace the default "service as a docker container"
         setup, and indicate this by returning ``True``. I can see this

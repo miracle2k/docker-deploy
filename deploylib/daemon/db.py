@@ -19,6 +19,7 @@ class Deployment(Persistent):
         self.id = id
         self.services = BTrees.OOBTree.BTree()
         self.data = BTrees.OOBTree.BTree()
+        self.resources = BTrees.OOBTree.BTree()
 
         # The globals for this deployment. The thing is, when the
         # globals change we ostensibly should release new versions
@@ -35,6 +36,22 @@ class Deployment(Persistent):
         if not name in self.services:
             self.services[name] = DeployedService(self, name)
         return self.services[name]
+
+    def set_resource(self, name, value=True):
+        """Declare the given resource as available, store a value along
+        side it.
+
+        If the resource was available before, the stored value is changed.
+
+        Resources are things like databases; services may depend on
+        resources being available before they can be set up.
+        """
+        self.resources[name] = value
+
+    def get_resource(self, name):
+        """Return the value of the resource, or None if it does not exist.
+        """
+        return self.resources.get(name, None)
 
 
 class DeployedService(Persistent):

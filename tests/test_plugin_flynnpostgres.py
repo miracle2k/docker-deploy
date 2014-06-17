@@ -26,11 +26,11 @@ class TestFlynnPostgres(object):
 
         # Bring up the database
         host.set_service('foo', 'db', {})
-        assert not deployment.data['flynn-postgres']
+        assert not deployment.get_resource('my-database')
 
         # Bring up the database api container
         host.set_service('foo', 'db-api', {'env': {'FLYNN_POSTGRES': 'abc'}})
-        assert 'my-database' in deployment.data['flynn-postgres']
+        assert deployment.get_resource('my-database')
 
     def test_variable_insertion(self, host):
         """Test that the database variables are inserted into all of
