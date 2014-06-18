@@ -92,9 +92,12 @@ class FlynnPostgresPlugin(Plugin):
         if not section:
             return
 
-        data = deployment.data.get('flynn-postgres', {})
-        for dbid, created_db in data.items():
-            env.update(self._make_env(section[dbid].get('expose_as'), **data[dbid]))
+        for dbid in section.keys():
+            data = deployment.get_resource(dbid)
+            if data:
+                env.update(self._make_env(
+                    section[dbid].get('expose_as'),
+                    **data))
 
     def post_setup(self, service, version):
         """After both the postgres container itself and the api container

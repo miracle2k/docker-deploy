@@ -1,4 +1,5 @@
 import json
+from deploylib.plugins.flynn_postgres import FlynnPostgresPlugin
 
 
 class TestFlynnPostgres(object):
@@ -47,9 +48,9 @@ class TestFlynnPostgres(object):
                 }
             }
         })
-        deployment.data['flynn-postgres'] = {'my-database': {
-            'dbname': 'foo', 'user': 'bar', 'password': 'baz'
-        }}
+        host.get_plugin(FlynnPostgresPlugin).set_db_resource(
+            deployment, 'my-database', 'foo', 'bar', 'baz'
+        )
 
         # Deploy a service
         host.set_service('foo', 'a-service', {})
