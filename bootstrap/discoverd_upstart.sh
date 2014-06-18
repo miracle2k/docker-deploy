@@ -37,7 +37,7 @@ script
     inotifywait -t 2 -e create \$(dirname $FILE)
   done
   sleep 1
-  docker run --rm --name etcd -p $ip:4001:4001 -p $ip:7001:7001 coreos/etcd -name local -data-dir /srv/etcd -bind-addr=0.0.0.0:4001 --peer-addr=$ip:7001
+  docker run --rm --name etcd -v /srv/etcd:/data.etcd -p $ip:4001:4001 -p $ip:7001:7001 coreos/etcd -name local -data-dir /data.etcd -bind-addr=0.0.0.0:4001 --peer-addr=$ip:7001
 end script
 EOF
 

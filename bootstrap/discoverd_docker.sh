@@ -22,7 +22,7 @@ docker rm -f etcd discoverd || true
 
 # Run etcd first
 # It seems due to the stange way etcdctl connects, we need to set --peer-addr
-docker run -d -p 4001:4001 -p 7001:7001 --name etcd coreos/etcd -name local -data-dir /tmp/data.etcd -bind-addr=0.0.0.0:4001 --peer-addr=$ip:7001
+docker run -d -p 4001:4001 -p 7001:7001 --name etcd -v /tmp/etcd:/data.etcd coreos/etcd -name local -data-dir /data.etcd -bind-addr=0.0.0.0:4001 --peer-addr=$ip:7001
 
 # Then run discoverd
 docker run -d --name discoverd -p 1111:1111 -e EXTERNAL_IP=$ip flynn/discoverd -etcd http://$ip:4001
