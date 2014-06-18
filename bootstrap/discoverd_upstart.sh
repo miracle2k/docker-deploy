@@ -58,4 +58,9 @@ start on started discoverd
 stop on stopping discoverd
 EOF
 
+# Disable docker attempting to restart containers
+sudo sh -c "echo 'DOCKER_OPTS=\"-r=false\"' > /etc/default/docker"
+initctl stop docker
+initctl start docker
+
 wget https://sdutil.s3.amazonaws.com/sdutil.linux -O /usr/local/bin/sdutil && chmod +x /usr/local/bin/sdutil
