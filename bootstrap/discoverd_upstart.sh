@@ -57,3 +57,5 @@ description "docker-deploy root"
 start on started discoverd
 stop on stopping discoverd
 EOF
+
+wget https://sdutil.s3.amazonaws.com/sdutil.linux -O /usr/local/bin/sdutil && chmod +x /usr/local/bin/sdutil
