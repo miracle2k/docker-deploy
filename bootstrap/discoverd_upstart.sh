@@ -17,7 +17,7 @@ else
     ip=$(ifconfig | grep -A 1 'docker0' | tail -1 | cut -d ':' -f 2 | cut -d ' ' -f 1)
 fi
 
-if [ -n "ip" ]; then
+if [ ! -n "ip" ]; then
     echo "Did not find host IP to use"
     exit 1
 fi
