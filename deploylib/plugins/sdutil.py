@@ -1,16 +1,25 @@
+"""Can wrap containers with sdutil for service discovery registration
+and consumption:
+
+foo:
+    ports: [a, b, c]
+    sdutil:
+        # Register all mapped ports with discoverd
+        register: true
+        expose:
+            service: ENV_VAR
+
+For now, requires ``/sdutil`` binary to exist in the container.
+
+NOTE: This does not read the entrypoint from the image, so you need
+to re-declare the entrypoint in the service definition, or otherwise
+things will likely not work.
+"""
+
 from deploylib.plugins import Plugin
 
 
 class SdutilPlugin(Plugin):
-    """Can wrap containers with sdutil for service discovery registration
-    and consumption.
-
-    For now, requires ``/sdutil`` binary to exist in the container.
-
-    NOTE: This does not read the entrypoint from the image, so you need
-    to re-declare the entrypoint in the service definition, or otherwise
-    things will likely not work.
-    """
 
     def before_start(self, service, definition, runcfg, port_assignments):
 
@@ -42,7 +51,7 @@ class SdutilPlugin(Plugin):
                 if not map['host']:
                     continue
                 register_as = '{did}:{sname}'.format(
-                    did=deploy_id, sname=definition.name)
+                    did=deploy_id, sname=service.name)
                 if pname:
                     # deploy:service:port or deploy:service for the
                     # default port, indicated by an empty string.

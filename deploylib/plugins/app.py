@@ -118,7 +118,10 @@ class AppPlugin(Plugin):
         definition['image'] = 'flynn/slugrunner'
         definition['entrypoint'] = '/runner/init'
         definition['cmd'] = ['start'] + definition['cmd']
-        # For compatibility with sdutil plugin - tell it where to find the binary
+        # For compatibility with sdutil plugin - tell it where to find the
+        # binary. Note that slugrunner has support for sdutil builtin,
+        # enabled by setting the SD_NAME variable. We do not use this support
+        # and instead use the sdutil plugin do its thing.
         definition['kwargs'].setdefault('sdutil', {})
         definition['kwargs']['sdutil']['binary'] = 'sdutil'
 
