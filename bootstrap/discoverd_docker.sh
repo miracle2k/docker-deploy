@@ -25,7 +25,7 @@ docker rm -f etcd discoverd || true
 docker run -d -p 4001:4001 -p 7001:7001 --name etcd -v /tmp/etcd:/data.etcd coreos/etcd -name local -data-dir /data.etcd -bind-addr=0.0.0.0:4001 --peer-addr=$ip:7001
 
 # Then run discoverd
-docker run -d --name discoverd -p 1111:1111 -e EXTERNAL_IP=$ip flynn/discoverd -etcd http://$ip:4001
+docker run -d --name discoverd --link etcd:etcd -p 1111:1111 -e EXTERNAL_IP=$ip flynn/discoverd -etcd http://$ip:4001
 
 echo "export ETCD=$ip:4001"
 echo "export DISCOVERD=$ip:1111"
