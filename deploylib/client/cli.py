@@ -87,7 +87,7 @@ def run_plugins(method_name, *args, **kwargs):
         if not method:
             continue
         result = method(*args, **kwargs)
-        if not result is False:
+        if not result is None:
             return result
     else:
         return False
