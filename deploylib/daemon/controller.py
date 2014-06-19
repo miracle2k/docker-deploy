@@ -4,6 +4,8 @@ from os import path
 import shlex
 from subprocess import check_output as run, CalledProcessError
 import random
+import binascii
+import click
 import gevent
 import netifaces
 import ZODB
@@ -120,7 +122,14 @@ class ControllerInterface(object):
     def close(self):
         self._db_obj.close()
 
+    def __enter__(self):
+        return self
+
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            transaction.commit()
+        else:
+            transaction.abort()
         self.close()
 
     def create_deployment(self, deploy_id, fail=True):
@@ -435,12 +444,9 @@ class Controller(object):
         server.serve_forever()
 
 
-def cli():
-    """
-    usage:
-    ./api.py init <auth-key>
-    ./api.py [<bind>]
-    """
+@click.option('--bind')
+@click.command()
+def cli(bind):
     # Either the tests have already patched, or we do it now
     import gevent.monkey
     if not gevent.monkey.saved:
@@ -454,20 +460,18 @@ def cli():
         volumes_dir=os.environ.get('DEPLOY_DATA', '/srv/vdata'),
         db_dir=os.environ.get('DEPLOY_STATE', '/srv/vstate'))
 
-    import docopt
-    result = docopt.docopt(cli.__doc__)
-    if result['init']:
-        auth_key = result['<auth-key>']
-
-        with controller.interface() as api:
-            api.db.auth_key = auth_key
+    # Initialize the controller on first run
+    with controller.interface() as api:
+        if not 'system' in api.db.deployments:
+            api.db.auth_key = binascii.hexlify(os.urandom(256//8)).decode('ascii')
             set_context(Context(api))
             api.create_deployment('system', fail=False)
             api.run_plugins('on_system_init')
-            transaction.commit()
+            print "Initialized system."
+            print "Auth key is: %s" % api.db.auth_key
             return
 
-    bind_opt = (result['<bind>'] or '0.0.0.0:5555').split(':', 1)
+    bind_opt = (bind or '0.0.0.0:5555').split(':', 1)
     if len(bind_opt) == 1:
         host = bind_opt[0]
         port = 5555
