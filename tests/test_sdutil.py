@@ -1,3 +1,9 @@
+from deploylib.plugins.sdutil import SdutilPlugin
+
+
+controller_plugins = [SdutilPlugin]
+
+
 class TestSdutilPlugin(object):
 
     def test_register(self, host):

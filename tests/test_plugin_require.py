@@ -1,3 +1,9 @@
+from deploylib.plugins.setup_require import RequiresPlugin
+
+
+controller_plugins = [RequiresPlugin]
+
+
 class TestRequires(object):
 
     def test_with_services(self, host):

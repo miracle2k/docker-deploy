@@ -14,7 +14,8 @@ def host(request, tmpdir):
     os.environ['HOST_IP'] = '127.0.0.1'
     host = DockerHost(
         volumes_dir=str(tmpdir.mkdir('volumes')),
-        db_dir=str(tmpdir.join('db')))
+        db_dir=str(tmpdir.join('db')),
+        plugins=getattr(request.module, "controller_plugins", []))
 
     # By default we mock the whole backend. However, the test module
     # can disable this.

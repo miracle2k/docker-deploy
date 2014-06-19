@@ -25,6 +25,8 @@ class RequiresPlugin(Plugin):
     before this plugin releases holds on their dependent services.
     """
 
+    priority = 20
+
     def setup(self, service, version):
         definition = version.definition
         requirements = iterablify(definition['kwargs'].get('require'))

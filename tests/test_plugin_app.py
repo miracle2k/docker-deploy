@@ -4,6 +4,10 @@ import mock
 import pytest
 from werkzeug.datastructures import FileStorage
 from deploylib.daemon.host import canonical_definition
+from deploylib.plugins.app import AppPlugin
+
+
+controller_plugins = [AppPlugin]
 
 
 @pytest.fixture(autouse=True)

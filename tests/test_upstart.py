@@ -3,6 +3,7 @@ import pytest
 from deploylib.plugins.upstart import UpstartPlugin
 
 
+controller_plugins = [UpstartPlugin]
 mock_backend = False
 
 

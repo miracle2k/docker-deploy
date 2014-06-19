@@ -63,6 +63,8 @@ class AppPlugin(Plugin):
     """Will run a 12-factor style app.
     """
 
+    priority = 50
+
     def setup(self, service, version):
         if not 'git' in version.definition['kwargs']:
             return False

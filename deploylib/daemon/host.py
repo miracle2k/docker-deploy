@@ -7,6 +7,7 @@ import random
 import netifaces
 import ZODB
 import ZODB.FileStorage
+from deploylib.plugins import load_plugins, Plugin
 from deploylib.plugins.upstart import UpstartBackend
 from deploylib.daemon.db import DeployDB, Deployment
 from .context import ctx
@@ -184,25 +185,10 @@ class DockerHost(LocalMachineImplementation):
     def __init__(self, docker_url=None, plugins=None, **kwargs):
         LocalMachineImplementation.__init__(self, **kwargs)
 
-        self.plugins = plugins or []
-
-        # TODO: Load these from somewhere and pass them in
-        from deploylib.plugins.app import AppPlugin
-        from deploylib.plugins.domains import DomainPlugin
-        from deploylib.plugins.sdutil import SdutilPlugin
-        from deploylib.plugins.flynn_postgres import FlynnPostgresPlugin
-        from deploylib.plugins.setup_require import RequiresPlugin
-        from deploylib.plugins.etcd_discoverd import DiscoverdEtcdPlugin
-        from deploylib.plugins.upstart import UpstartPlugin
-        self.plugins = [
-            DiscoverdEtcdPlugin(self),
-            RequiresPlugin(self),
-            AppPlugin(self),
-            FlynnPostgresPlugin(self),
-            DomainPlugin(self),
-            SdutilPlugin(self),
-            UpstartPlugin(self),
-        ]
+        if plugins is None:
+            self.plugins = load_plugins(Plugin, self)
+        else:
+            self.plugins = [p(self) for p in plugins]
 
         self.backend = UpstartBackend(docker_url)
 

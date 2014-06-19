@@ -36,6 +36,8 @@ class Plugin(object):
         runcfg.
     """
 
+    priority = 100
+
     def __init__(self, host):
         self.host = host
 

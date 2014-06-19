@@ -2,6 +2,9 @@ import json
 from deploylib.plugins.flynn_postgres import FlynnPostgresPlugin
 
 
+controller_plugins = [FlynnPostgresPlugin]
+
+
 class TestFlynnPostgres(object):
 
     def test_db_creation(self, host, responses):
