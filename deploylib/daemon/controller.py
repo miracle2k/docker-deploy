@@ -4,13 +4,16 @@ from os import path
 import shlex
 from subprocess import check_output as run, CalledProcessError
 import random
+import gevent
 import netifaces
 import ZODB
 import ZODB.FileStorage
+import transaction
+from deploylib.daemon.api import create_app
 from deploylib.plugins import load_plugins, Plugin
 from deploylib.plugins.upstart import UpstartBackend
 from deploylib.daemon.db import DeployDB, Deployment
-from .context import ctx
+from .context import ctx, set_context, Context
 
 
 class DeployError(Exception):
@@ -99,57 +102,26 @@ def canonical_definition(name, definition):
     return name, DeepCopyDict(canonical)
 
 
-class LocalMachineImplementation(object):
-    """The DockerHost class is currently split in two, with the features
-    that depend on the local filesystem in one class and the features that
-    use the Docker API via TCP in another.
+class ControllerInterface(object):
+    """This implements the main controller functionality around a
+    database connection. Because we are a multi-threaded/multi-greenleted
+    application, and ZODB does not support multiple threads sharing the
+    same connection (nor generally do other databases), each thread
+    operating on the server will get their own ``ControllerInterface``.
     """
 
-    def __init__(self, db_dir, volumes_dir):
-        self.volume_base = path.abspath(volumes_dir)
-
-        self._zodb_storage = ZODB.FileStorage.FileStorage(db_dir)
-        self._zodb_obj = ZODB.DB(self._zodb_storage)
-        self._zodb_connection = self._zodb_obj.open()
-        if not getattr(self._zodb_connection.root, 'deploy', None):
-            self._zodb_connection.root.deploy = DeployDB()
-        self.db = self._zodb_connection.root.deploy
-
-        if not path.exists(volumes_dir):
-            os.mkdir(volumes_dir)
+    def __init__(self, controller):
+        self.controller = controller
+        self.backend = controller.backend
+        self.run_plugins = controller.run_plugins
+        self.get_plugin = controller.get_plugin
+        self._db_obj, self.db = controller.get_connection()
 
     def close(self):
-        self._zodb_connection.close()
-        self._zodb_obj.close()
-        self._zodb_storage.close()
+        self._db_obj.close()
 
-    def get_host_ip(self):
-        """Get IP from local interface."""
-        lan_ip = os.environ.get('HOST_IP')
-        if lan_ip:
-            return lan_ip
-
-        try:
-            return netifaces.ifaddresses('docker0')[netifaces.AF_INET][0]['addr']
-        except ValueError:
-            raise RuntimeError('Cannot determine host ip, set HOST_IP environment variable')
-
-    def discover(self, servicename):
-        # sdutil does not support specifying a discoverd host yet, which is
-        # fine with us for now since all is running on the same host.
-        try:
-            return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
-                self.get_host_ip(), servicename), shell=True).strip()
-        except CalledProcessError as e:
-            raise ServiceDiscoveryError(e)
-
-    def cache(self, *names):
-        """Return a cache path. Same path for same name.
-        """
-        tmpdir =  path.join(self.volume_base, '_cache', *names)
-        if not os.path.exists(tmpdir):
-            os.makedirs(tmpdir)
-        return tmpdir
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
     def create_deployment(self, deploy_id, fail=True):
         """Create a new instance.
@@ -173,41 +145,6 @@ class LocalMachineImplementation(object):
         if globals_changed:
             self.run_plugins('on_globals_changed', deployment)
         return globals_changed
-
-
-class DockerHost(LocalMachineImplementation):
-    """This is our high-level internal API.
-
-    It is what the outward-facing HTTP API uses to do its job. You can
-    tell it to deploy a service.
-    """
-
-    def __init__(self, docker_url=None, plugins=None, **kwargs):
-        LocalMachineImplementation.__init__(self, **kwargs)
-
-        if plugins is None:
-            self.plugins = load_plugins(Plugin, self)
-        else:
-            self.plugins = [p(self) for p in plugins]
-
-        self.backend = UpstartBackend(docker_url)
-
-    def run_plugins(self, method_name, *args, **kwargs):
-        for plugin in self.plugins:
-            method = getattr(plugin, method_name, None)
-            if not method:
-                continue
-            result = method(*args, **kwargs)
-            if result:
-                return result
-        else:
-            return False
-
-    def get_plugin(self, klass):
-        for plugin in self.plugins:
-            if isinstance(plugin, klass):
-                return plugin
-        raise IndexError(klass)
 
     def set_service(self, deploy_id, name, definition, force=False, **kwargs):
         """Add a service to the deployment, or replace the existing
@@ -310,7 +247,7 @@ class DockerHost(LocalMachineImplementation):
         # Construct the 'volumes' argument.
         for volume_name, volume_path in definition.get('volumes').items():
             host_path = path.join(
-                self.volume_base, deployment.id, service.name, volume_name)
+                self.controller.volume_base, deployment.id, service.name, volume_name)
             runcfg['volumes'][host_path] = volume_path
 
         # Construct the 'ports' argument. Given some named ports, we want
@@ -397,3 +334,148 @@ class DockerHost(LocalMachineImplementation):
         service.append_version(version)
         service.append_instance(instance_id)
         ctx.log("New instance id is %s" % instance_id[0])
+
+    #####
+
+    def get_host_ip(self):
+        """Get IP from local interface."""
+        lan_ip = os.environ.get('HOST_IP')
+        if lan_ip:
+            return lan_ip
+
+        try:
+            return netifaces.ifaddresses('docker0')[netifaces.AF_INET][0]['addr']
+        except ValueError:
+            raise RuntimeError('Cannot determine host ip, set HOST_IP environment variable')
+
+    def discover(self, servicename):
+        # sdutil does not support specifying a discoverd host yet, which is
+        # fine with us for now since all is running on the same host.
+        try:
+            return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
+                self.get_host_ip(), servicename), shell=True).strip()
+        except CalledProcessError as e:
+            raise ServiceDiscoveryError(e)
+
+    def cache(self, *names):
+        """Return a cache path. Same path for same name.
+        """
+        tmpdir =  path.join(self.controller.volume_base, '_cache', *names)
+        if not os.path.exists(tmpdir):
+            os.makedirs(tmpdir)
+        return tmpdir
+
+
+class Controller(object):
+    """This is the main class of the controller daemon.
+    """
+
+    def __init__(self, db_dir, volumes_dir, docker_url=None, plugins=None):
+        if not path.exists(volumes_dir):
+            os.mkdir(volumes_dir)
+
+        self.volume_base = path.abspath(volumes_dir)
+
+        self._zodb_storage = ZODB.FileStorage.FileStorage(db_dir)
+        self._zodb_obj = ZODB.DB(self._zodb_storage)
+
+        if plugins is None:
+            self.plugins = load_plugins(Plugin)
+        else:
+            self.plugins = [p() for p in plugins]
+
+        self.backend = UpstartBackend(docker_url)
+
+    def close(self):
+        self._zodb_obj.close()
+        self._zodb_storage.close()
+
+    def get_connection(self):
+        self._zodb_connection = self._zodb_obj.open()
+        if not getattr(self._zodb_connection.root, 'deploy', None):
+            self._zodb_connection.root.deploy = DeployDB()
+        return self._zodb_connection, self._zodb_connection.root.deploy
+
+    def interface(self):
+        """
+        ZODB absolutely does not like you creating multiple connections
+        in the same thread:
+
+        StorageTransactionError: Duplicate tpc_begin calls for same transaction
+        """
+        return ControllerInterface(self)
+
+    def run_plugins(self, method_name, *args, **kwargs):
+        for plugin in self.plugins:
+            method = getattr(plugin, method_name, None)
+            if not method:
+                continue
+            result = method(*args, **kwargs)
+            if result:
+                return result
+        else:
+            return False
+
+    def get_plugin(self, klass):
+        for plugin in self.plugins:
+            if isinstance(plugin, klass):
+                return plugin
+        raise IndexError(klass)
+
+    def run(self, host, port):
+        # Register ourselfes with service discovery
+        #self.register('docker-deploy', int(port))
+
+        # Start API
+        app = create_app(self)
+
+        # TODO: Bring back reloader: os.environ.get('RELOADER') == '1'
+        from gevent.wsgi import WSGIServer
+        server = WSGIServer((host, int(port)), app)
+        server.serve_forever()
+
+
+def cli():
+    """
+    usage:
+    ./api.py init <auth-key>
+    ./api.py [<bind>]
+    """
+    # Either the tests have already patched, or we do it now
+    import gevent.monkey
+    if not gevent.monkey.saved:
+        import sys
+        # if 'threading' in sys.modules:
+        #         raise Exception('threading module loaded before patching!')
+        gevent.monkey.patch_all()
+
+    controller = Controller(
+        docker_url=os.environ.get('DOCKER_HOST', None),
+        volumes_dir=os.environ.get('DEPLOY_DATA', '/srv/vdata'),
+        db_dir=os.environ.get('DEPLOY_STATE', '/srv/vstate'))
+
+    import docopt
+    result = docopt.docopt(cli.__doc__)
+    if result['init']:
+        auth_key = result['<auth-key>']
+
+        with controller.interface() as api:
+            api.db.auth_key = auth_key
+            set_context(Context(api))
+            api.create_deployment('system', fail=False)
+            api.run_plugins('on_system_init')
+            transaction.commit()
+            return
+
+    bind_opt = (result['<bind>'] or '0.0.0.0:5555').split(':', 1)
+    if len(bind_opt) == 1:
+        host = bind_opt[0]
+        port = 5555
+    else:
+        host, port = bind_opt
+
+    controller.run(host, port)
+
+
+if __name__ == '__main__':
+    cli()

@@ -1,1 +1,1 @@
-from .api import run
+from .controller import cli

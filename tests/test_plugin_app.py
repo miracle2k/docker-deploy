@@ -3,7 +3,7 @@ import subprocess
 import mock
 import pytest
 from werkzeug.datastructures import FileStorage
-from deploylib.daemon.host import canonical_definition
+from deploylib.daemon.controller import canonical_definition
 from deploylib.plugins.app import AppPlugin
 
 
@@ -11,10 +11,10 @@ controller_plugins = [AppPlugin]
 
 
 @pytest.fixture(autouse=True)
-def install_shelf(host):
+def install_shelf(cintf):
     # Pretend shelf is installed, so the plugin won't attempt to
     # during tests, which makes counting mocked calls more confusing.
-    host.db.deployments['system'].services['shelf'] = True
+    cintf.db.deployments['system'].services['shelf'] = True
 
 
 @pytest.fixture(autouse=True)
@@ -34,41 +34,41 @@ def patch_build(request):
 
 class TestAppPlugin(object):
 
-    def test_service_initial_in_hold(self, host):
+    def test_service_initial_in_hold(self, cintf):
         """Apps are initially set to hold while code is missing.
         """
-        host.create_deployment('foo')
-        service = host.set_service('foo', 'bar', {
+        cintf.create_deployment('foo')
+        service = cintf.set_service('foo', 'bar', {
             'git': '.'
         })
 
         assert service.held
         assert service.hold_message
         assert not service.versions
-        assert not host.backend.create_container.called
+        assert not cintf.backend.create_container.called
 
         # Setting a new version while service is still on hold:
         # Nothing changes
-        service = host.set_service('foo', 'bar', {
+        service = cintf.set_service('foo', 'bar', {
             'git': '.',
             'foo': 'bar'
         })
         assert service.held
         assert service.hold_message
         assert not service.versions
-        assert not host.backend.create.called
+        assert not cintf.backend.create.called
         # New definition of the service has been cached
         assert service.held_version.definition['kwargs']['foo'] == 'bar'
 
-    def test_first_data_upload(self, host):
+    def test_first_data_upload(self, cintf):
         """App code for a held service is provided via upload.
         """
-        deployment = host.create_deployment('foo')
-        host.set_globals('foo', {'a': 1})
+        deployment = cintf.create_deployment('foo')
+        cintf.set_globals('foo', {'a': 1})
         service = deployment.set_service('bar')
         service.hold('bla', service.derive(canonical_definition('bar', {'git': '.'})[1]))
 
-        host.provide_data(
+        cintf.provide_data(
             'foo', 'bar',  {'app': FileStorage()}, {'app': {'version': 42}})
 
         # docker build was called
@@ -83,19 +83,19 @@ class TestAppPlugin(object):
         assert service.versions[0].globals == {'a': 1}
         assert service.versions[0].data['app_version_id'] == 42
         # Also created via the backend.
-        assert len(host.backend.start.mock_calls) == 1
+        assert len(cintf.backend.start.mock_calls) == 1
 
-    def test_subsequent_data_upload(self, host):
+    def test_subsequent_data_upload(self, cintf):
         """Uploading a new piece of data creates new version.
         """
-        deployment = host.create_deployment('foo')
-        host.set_globals('foo', {'a': 1})
+        deployment = cintf.create_deployment('foo')
+        cintf.set_globals('foo', {'a': 1})
         service = deployment.set_service('bar')
         version = service.append_version(
             service.derive(canonical_definition('bar', {'git': '.'})[1]))
         version.data['app_version_id'] = 3
 
-        host.provide_data(
+        cintf.provide_data(
             'foo', 'bar',  {'app': FileStorage()}, {'app': {'version': 99}})
 
         # Another slug was built
@@ -107,17 +107,17 @@ class TestAppPlugin(object):
         assert service.versions[0].globals ==service.versions[1].globals
         assert service.versions[1].data['app_version_id'] == 99
 
-    def test_new_version_via_config_change(self, host):
+    def test_new_version_via_config_change(self, cintf):
         """Changing the service definition creates a new version
         """
-        deployment = host.create_deployment('foo')
-        host.set_globals('foo', {'a': 1})
+        deployment = cintf.create_deployment('foo')
+        cintf.set_globals('foo', {'a': 1})
         service = deployment.set_service('bar')
         version = service.append_version(
             service.derive(canonical_definition('bar', {'git': '.'})[1]))
         version.data['app_version_id'] = 3
 
-        service = host.set_service('foo', 'bar', {'git': '.', 'foo': 1})
+        service = cintf.set_service('foo', 'bar', {'git': '.', 'foo': 1})
 
         # No slug was built
         assert len(subprocess.Popen.mock_calls) == 0

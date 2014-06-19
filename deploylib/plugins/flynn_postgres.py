@@ -70,7 +70,7 @@ from requests import ConnectionError
 import click
 from deploylib.daemon.api import json_method
 from deploylib.daemon.context import ctx
-from deploylib.daemon.host import DeployError, ServiceDiscoveryError
+from deploylib.daemon.controller import DeployError, ServiceDiscoveryError
 from deploylib.plugins import Plugin, LocalPlugin
 
 
@@ -135,7 +135,7 @@ class FlynnPostgresPlugin(Plugin):
         start = time.time()
         while time.time() - start < 40:
             try:
-                httpurl = 'http://%s/databases' % self.host.discover(
+                httpurl = 'http://%s/databases' % ctx.cintf.discover(
                     discovery_name)
             except (ServiceDiscoveryError, ConnectionError):
                 time.sleep(1)
@@ -156,7 +156,7 @@ class FlynnPostgresPlugin(Plugin):
                 "Cannot find flynn-postgres API: %s" % discovery_name)
 
     def set_db_resource(self, deployment, dbid, dbname, user, password):
-        self.host.set_resource(deployment.id, dbid,
+        ctx.cintf.set_resource(deployment.id, dbid,
             {'dbname': dbname, 'user': user, 'password': password})
 
 
@@ -168,8 +168,8 @@ def api_init(deployment, dbid, database, user, password):
     """API to set the database configuration manually, for example
     when migrating from another installation.
     """
-    deployment = g.host.db.deployments[deployment]
-    g.host.get_plugin(FlynnPostgresPlugin).set_db_resource(
+    deployment = g.controller.db.deployments[deployment]
+    g.controller.get_plugin(FlynnPostgresPlugin).set_db_resource(
         deployment, dbid, database, user, password
     )
     return {'job': 'Setting flynn-postgres connection info'}

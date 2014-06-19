@@ -1,4 +1,4 @@
-from deploylib.daemon.host import canonical_definition
+from deploylib.daemon.controller import canonical_definition
 
 
 class TestServiceDef(object):

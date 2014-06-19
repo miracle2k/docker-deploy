@@ -1,3 +1,4 @@
+from deploylib.daemon.context import ctx
 from deploylib.plugins import Plugin
 
 
@@ -83,4 +84,4 @@ class RequiresPlugin(Plugin):
                 # trigger this plugin again if there are complex deps).
                 print('Dependency for held service %s now available' %
                       existing_service.name)
-                self.host.setup_version(existing_service, version)
+                ctx.cintf.setup_version(existing_service, version)

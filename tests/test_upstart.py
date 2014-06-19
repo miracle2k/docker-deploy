@@ -17,18 +17,18 @@ def upstart(tmpdir):
 @pytest.mark.usefixtures('mock_backend_docker')
 class TestUpstart(object):
 
-    def test_create_deployment_file(self, host, upstart):
+    def test_create_deployment_file(self, cintf, upstart):
         """An upstart file is created for each deployment."""
-        host.create_deployment('foo')
+        cintf.create_deployment('foo')
         assert upstart.join('foo.conf').exists()
 
-    def test_create_service_file(self, host, upstart):
+    def test_create_service_file(self, cintf, upstart):
         """An upstart file is created for each service, and deleted.
         """
-        host.create_deployment('foo')
-        host.set_service('foo', 'bar', {})
+        cintf.create_deployment('foo')
+        cintf.set_service('foo', 'bar', {})
         assert upstart.join('foo-bar-1-1.conf').exists()
 
-        host.set_service('foo', 'bar', {}, force=True)
+        cintf.set_service('foo', 'bar', {}, force=True)
         assert upstart.join('foo-bar-2-1.conf').exists()
         assert not upstart.join('foo-bar-1-1.conf').exists()

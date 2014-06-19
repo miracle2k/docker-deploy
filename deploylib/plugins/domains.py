@@ -14,6 +14,7 @@ import requests
 from . import Plugin, LocalPlugin
 import yaml
 from deploylib.client.service import ServiceFile
+from deploylib.daemon.context import ctx
 
 
 class StrowgerClient:
@@ -110,7 +111,7 @@ class DomainPlugin(Plugin):
         if not domains:
             return
 
-        api_ip = self.host.discover('strowger-api')
+        api_ip = ctx.cintf.discover('strowger-api')
         strowger = StrowgerClient(api_ip)
 
         for domain, data in domains.items():

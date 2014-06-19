@@ -38,9 +38,6 @@ class Plugin(object):
 
     priority = 100
 
-    def __init__(self, host):
-        self.host = host
-
 
 class LocalPlugin(object):
     """Plugin that runs on the client."""

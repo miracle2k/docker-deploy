@@ -1,7 +1,7 @@
 import gevent.queue
-
-
 from werkzeug.local import Local
+
+
 local = Local()
 ctx = local('ctx')
 
@@ -11,7 +11,8 @@ def set_context(ctx):
 
 class Context(object):
 
-    def __init__(self):
+    def __init__(self, cintf):
+        self.cintf = cintf
         self.queue = gevent.queue.Queue()
 
     def custom(self, **obj):

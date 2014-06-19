@@ -1,4 +1,4 @@
 #!/usr/bin/env python
-from deploylib.daemon.api import run
+from deploylib.daemon import cli
 
-run()
+cli()

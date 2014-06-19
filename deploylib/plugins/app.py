@@ -11,7 +11,7 @@ import tempfile
 from . import Plugin, LocalPlugin
 import yaml
 from deploylib.daemon.context import ctx
-from deploylib.daemon.host import DeployError
+from deploylib.daemon.controller import DeployError
 
 
 class LocalAppPlugin(LocalPlugin):
@@ -70,9 +70,9 @@ class AppPlugin(Plugin):
             return False
 
         # If the shelf service has not yet been setup, do so now
-        if not 'shelf' in self.host.db.deployments['system'].services:
+        if not 'shelf' in ctx.cintf.db.deployments['system'].services:
             shelf_def = yaml.load(SHELF)
-            self.host.set_service('system', 'shelf', shelf_def, force=True)
+            ctx.cintf.set_service('system', 'shelf', shelf_def, force=True)
 
         # If this service version has no slug id attached, hold it back
         # for now and ask the client to provide the code.
@@ -105,7 +105,7 @@ class AppPlugin(Plugin):
         self.build(service, version, uploaded_file)
 
         # Run this new version
-        self.host.setup_version(service, version)
+        ctx.cintf.setup_version(service, version)
 
     def rewrite_service(self, service, version, definition):
         """Convert service to be run as a slugrunner.
@@ -139,11 +139,11 @@ class AppPlugin(Plugin):
         slug_url = self._get_slug_url(service, version.data['app_version_id'])
 
         # To speed up the build, use a cache
-        cache_dir = self.host.cache(
+        cache_dir = ctx.cintf.cache(
             'slugbuilder', service.deployment.id, service.name)
 
         # Run the slugbuilder
-        docker = self.host.backend.client
+        docker = ctx.cintf.backend.client
         docker.pull('flynn/slugbuilder')
         env = self._build_env(service, version)
 
@@ -180,7 +180,7 @@ class AppPlugin(Plugin):
 
     def _get_slug_url(self, service, slug_name):
         # Put together an full url for a slug
-        shelf_ip = self.host.discover('shelf')
+        shelf_ip = ctx.cintf.discover('shelf')
         release_id = "{}/{}:{}".format(
             service.deployment.id, service.name, slug_name)
         slug_url = 'http://{}{}'.format(shelf_ip, '/slugs/{}'.format(release_id))

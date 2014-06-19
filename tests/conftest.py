@@ -4,52 +4,70 @@ import pytest
 import responses as responses_lib
 import transaction
 from deploylib.daemon.context import set_context, Context
-from deploylib.daemon.host import DockerHost
+from deploylib.daemon.controller import Controller
 
 
 @pytest.fixture
-def host(request, tmpdir):
-    """Provide an instance of :class:`DockerHost` for use in testing.
-    """
-    os.environ['HOST_IP'] = '127.0.0.1'
-    host = DockerHost(
+def controller(request, tmpdir):
+    controller = Controller(
         volumes_dir=str(tmpdir.mkdir('volumes')),
         db_dir=str(tmpdir.join('db')),
         plugins=getattr(request.module, "controller_plugins", []))
 
+    def close():
+        controller.close()
+    request.addfinalizer(close)
+
+    return controller
+
+
+@pytest.fixture
+def cintf(request, controller, tmpdir):
+    """Provide an instance of :class:`DockerHost` for use in testing.
+    """
+    os.environ['HOST_IP'] = '127.0.0.1'
+
+    cintf = controller.interface()
+
+    # Every cintf needs a context to operate
+    class TestContext(Context):
+        def custom(self, **kwargs):
+            print(kwargs)
+    set_context(TestContext(cintf))
+
     # By default we mock the whole backend. However, the test module
     # can disable this.
     if getattr(request.module, "mock_backend", True):
-        host.backend = mock.Mock()
-        host.backend.prepare.return_value = 'abc'
-        host.backend.start.return_value = 'abc'
+        cintf.backend = mock.Mock()
+        cintf.backend.prepare.return_value = 'abc'
+        cintf.backend.start.return_value = 'abc'
 
     # Test version of discovery client
-    host.discover = lambda s: s
+    cintf.discover = lambda s: s
 
     # Remove the upstart plugin - in the future we should enable plugins
     # for tests on an as-need basis.
     os.environ['UPSTART_DIR'] = tmpdir.join('upstart').mkdir().strpath
 
     # Host always has the system deployment
-    host.create_deployment('system', fail=False)
+    cintf.create_deployment('system', fail=False)
 
     def close():
         transaction.commit()
-        host.close()
+        cintf.close()
     request.addfinalizer(close)
-    return host
+    return cintf
 
 
 @pytest.fixture()
-def mock_backend_docker(host):
+def mock_backend_docker(cintf):
     """Most backends have a .client attribute that is the Docker client.
 
     This will mock out the calls to Docker. It can be used as an alternative
     to mocking the whole backend.
     """
-    host.backend.client = mock.Mock()
-    host.backend.client.create_container.return_value = {'Id': 'abc'}
+    cintf.backend.client = mock.Mock()
+    cintf.backend.client.create_container.return_value = {'Id': 'abc'}
 
 
 @pytest.fixture()
@@ -62,17 +80,3 @@ def responses(request):
     mock.start()
     request.addfinalizer(mock.stop)
     return mock
-
-
-@pytest.fixture(autouse=True)
-def envsetup(request):
-    """Mock out various other things."""
-
-    # Make sure there is always a context available
-    class TestContext(Context):
-        def custom(self, **kwargs):
-            print(kwargs)
-    set_context(TestContext())
-
-    def end(): pass
-    request.addfinalizer(end)
