@@ -128,4 +128,28 @@ Describing your infrastructure
 Routing domains
 ---------------
 
-(talk about plugins that can set up domain routing). 
+When you run an application, whether it is a custom container or via a
+buildpack, you'll generally want to put it behind a reverse proxy; you'll be
+able to run multiple instances of your app, on multiple hosts, and have the
+proxy redirect requests to them.
+
+There is currently one plugin for the ``strowger`` router, which works with
+the ``discoverd`` service discovery system. Define your domains in a global
+section, like this:
+
+    Domains:
+        example.org
+            http: example:app
+        staging.example.org
+            http: example-staging:app
+            auth: {'internal': 'secret'}
+
+We run two deployments here, ``example`` and ``example-staging``. The
+``strowger`` plugin recognizes the ``http`` key, and will tell the router
+to serve the domain ``example.org`` by forwarding requests to the
+``example:app`` service, which by convention should be the ``app`` service
+of the ``example`` deployment.
+
+In the staging example, we can see that it also allows an ``auth`` option,
+which will enforce HTTP Digest authentication.
+
