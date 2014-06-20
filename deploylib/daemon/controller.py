@@ -120,8 +120,13 @@ class ControllerInterface(object):
     def __init__(self, controller):
         self.controller = controller
         self.backend = controller.backend
+
         self.run_plugins = controller.run_plugins
         self.get_plugin = controller.get_plugin
+        self.discover = controller.discover
+        self.register = controller.register
+        self.get_host_ip = controller.get_host_ip
+
         self._db_obj, self.db = controller.get_connection()
 
     def close(self):
@@ -351,26 +356,6 @@ class ControllerInterface(object):
 
     #####
 
-    def get_host_ip(self):
-        """Get IP from local interface."""
-        lan_ip = os.environ.get('HOST_IP')
-        if lan_ip:
-            return lan_ip
-
-        try:
-            return netifaces.ifaddresses('docker0')[netifaces.AF_INET][0]['addr']
-        except ValueError:
-            raise RuntimeError('Cannot determine host ip, set HOST_IP environment variable')
-
-    def discover(self, servicename):
-        # sdutil does not support specifying a discoverd host yet, which is
-        # fine with us for now since all is running on the same host.
-        try:
-            return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
-                self.get_host_ip(), servicename), shell=True).strip()
-        except CalledProcessError as e:
-            raise ServiceDiscoveryError(e)
-
     def cache(self, *names):
         """Return a cache path. Same path for same name.
         """
@@ -436,9 +421,40 @@ class Controller(object):
                 return plugin
         raise IndexError(klass)
 
+    def get_host_ip(self):
+        """Get IP from local interface."""
+        lan_ip = os.environ.get('HOST_IP')
+        if lan_ip:
+            return lan_ip
+
+        try:
+            return netifaces.ifaddresses('docker0')[netifaces.AF_INET][0]['addr']
+        except ValueError:
+            raise RuntimeError('Cannot determine host ip, set HOST_IP environment variable')
+
+    def discover(self, servicename):
+        # sdutil does not support specifying a discoverd host yet, which is
+        # fine with us for now since all is running on the same host.
+        try:
+            return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
+                self.get_host_ip(), servicename), shell=True).strip()
+        except CalledProcessError as e:
+            raise ServiceDiscoveryError(e)
+
+    def register(self, servicename, address):
+        """This is used by the controller to register itself.
+        """
+        def regger():
+            try:
+                run('DISCOVERD={0}:1111 sdutil register {2}:{1}'.format(
+                    self.get_host_ip(), address, servicename), shell=True)
+            except CalledProcessError as e:
+                raise ServiceDiscoveryError(e)
+        gevent.spawn(regger)
+
     def run(self, host, port):
-        # Register ourselfes with service discovery
-        #self.register('docker-deploy', int(port))
+        # Register ourselves with service discovery
+        self.register('docker-deploy', int(port))
 
         # Start API
         app = create_app(self)
