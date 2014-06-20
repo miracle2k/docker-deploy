@@ -7,6 +7,7 @@ instance of strowger as part of the system deployment.
 
 import json
 import os
+from hashlib import md5
 from urlparse import urljoin
 from os.path import dirname, normpath, join as path, exists
 import click
@@ -15,6 +16,12 @@ from . import Plugin, LocalPlugin
 import yaml
 from deploylib.client.service import ServiceFile
 from deploylib.daemon.context import ctx
+
+
+def digest_passwd(username, realm, password):
+    """trac-digest.py / http://trac.edgewall.org/wiki/TracStandalone"""
+    kd = lambda x: md5(':'.join(x)).hexdigest()
+    return (username, realm, kd([username, realm, password]))
 
 
 class StrowgerClient:
@@ -36,10 +43,19 @@ class StrowgerClient:
         response.raise_for_status()
         return response.json()
 
-    def set_http_route(self, domain, service, cert=None, key=None):
+    def set_http_route(self, domain, service, cert=None, key=None, auth=None,
+                       auth_realm='protected'):
+        # Encode the passwords for the user, since strowger currently
+        # expects them to be submitted has hashes.
+        if auth:
+            auth = {k: digest_passwd(k, auth_realm, v)[2] for k, v in auth.items()}
+
         route = {
             'domain': domain,
             'service': service,
+            'auth_type': 'digest' if auth else None,
+            'http_auth': auth,
+            'http_realm': auth_realm,
             'tls_cert': cert,
             'tls_key': key
         }
@@ -118,8 +134,9 @@ class DomainPlugin(Plugin):
             service_name = data.get('http')
             if not service_name:
                 continue
-            strowger.set_http_route(domain, service_name, key=data.get('key'),
-                                    cert=data.get('cert'))
+            strowger.set_http_route(
+                domain, service_name, key=data.get('key'),
+                cert=data.get('cert'), auth=data.get('auth'))
 
         # TODO: Support further plugins to configure the domain DNS
         # TODO: The strowger interaction relates to how we could do
