@@ -86,7 +86,7 @@ def setup_strowger(app, **kwargs):
     print_jobs(app.api.setup('system', servicefile, force=True))
 
 
-class LocalDomainPlugin(LocalPlugin):
+class LocalStrowgerPlugin(LocalPlugin):
     """Resolve SSL cert paths."""
 
     def provide_cli(self, group):
@@ -116,7 +116,7 @@ class LocalDomainPlugin(LocalPlugin):
                 data['key'] = key
 
 
-class DomainPlugin(Plugin):
+class StrowgerPlugin(Plugin):
     """Will process a Domains section, which defines domains
     and maps them to services, and register those mappings with
     the strowger router.
@@ -131,7 +131,7 @@ class DomainPlugin(Plugin):
             return
 
         for name, deployment in ctx.cintf.db.deployments.items():
-            ctx.cintf.get_plugin(DomainPlugin).on_globals_changed(deployment)
+            ctx.cintf.get_plugin(StrowgerPlugin).on_globals_changed(deployment)
 
     def on_globals_changed(self, deployment):
         domains = deployment.globals.get('Domains', {})

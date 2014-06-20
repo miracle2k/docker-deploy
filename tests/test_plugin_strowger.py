@@ -1,9 +1,9 @@
 import json
 import pytest
-from deploylib.plugins.domains import DomainPlugin
+from deploylib.plugins.strowger import StrowgerPlugin
 
 
-controller_plugins = [DomainPlugin]
+controller_plugins = [StrowgerPlugin]
 
 
 @pytest.fixture(autouse=True)
