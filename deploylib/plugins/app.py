@@ -144,6 +144,7 @@ class AppPlugin(Plugin):
 
         # Run the slugbuilder
         docker = ctx.cintf.backend.client
+        ctx.log('Pulling flynn/slugbuilder')
         docker.pull('flynn/slugbuilder')
         env = self._build_env(service, version)
 
