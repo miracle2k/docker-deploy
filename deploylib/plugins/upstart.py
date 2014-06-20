@@ -27,7 +27,8 @@ def write_upstart_conf(name, template, **kwargs):
 def rm_upstart_conf(name):
     filename = os.path.join(
         os.environ.get('UPSTART_DIR', '/etc/init'), name + '.conf')
-    os.unlink(filename)
+    if os.path.exists(filename):
+        os.unlink(filename)
 
 
 class UpstartBackend(DockerOnlyBackend):
