@@ -457,25 +457,14 @@ class Controller(object):
         self.register('docker-deploy', int(port))
 
         # Start API
+        print('Serving API from :%s' % port)
         app = create_app(self)
-
-        # TODO: Bring back reloader: os.environ.get('RELOADER') == '1'
         from gevent.wsgi import WSGIServer
         server = WSGIServer((host, int(port)), app)
         server.serve_forever()
 
 
-@click.option('--bind')
-@click.command()
-def cli(bind):
-    # Either the tests have already patched, or we do it now
-    import gevent.monkey
-    if not gevent.monkey.saved:
-        import sys
-        # if 'threading' in sys.modules:
-        #         raise Exception('threading module loaded before patching!')
-        gevent.monkey.patch_all()
-
+def run_controller(host, port):
     controller = Controller(
         docker_url=os.environ.get('DOCKER_HOST', None),
         volumes_dir=os.environ.get('DEPLOY_DATA', '/srv/vdata'),
@@ -492,6 +481,22 @@ def cli(bind):
             print "Auth key is: %s" % api.db.auth_key
             return
 
+    controller.run(host, port)
+
+
+@click.option('--bind')
+@click.command()
+def cli(bind):
+    use_reloader = os.environ.get('RELOADER') == '1'
+
+    # Either the tests have already patched, or we do it now
+    import gevent.monkey
+    if not gevent.monkey.saved:
+        import sys
+        # if 'threading' in sys.modules:
+        #         raise Exception('threading module loaded before patching!')
+        gevent.monkey.patch_all()
+
     bind_opt = (bind or '0.0.0.0:5555').split(':', 1)
     if len(bind_opt) == 1:
         host = bind_opt[0]
@@ -499,7 +504,13 @@ def cli(bind):
     else:
         host, port = bind_opt
 
-    controller.run(host, port)
+    use_reloader = os.environ.get('RELOADER') == '1'
+    if use_reloader:
+        import werkzeug.serving
+        werkzeug.serving.run_with_reloader(lambda: run_controller(host, port))
+    else:
+        run_controller(host, port)
+
 
 
 if __name__ == '__main__':
