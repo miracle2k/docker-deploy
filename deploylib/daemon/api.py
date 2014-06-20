@@ -28,7 +28,8 @@ def check_auth():
     if request.headers.get('Authorization') == g.cintf.db.auth_key:
         return
 
-    return jsonify({'error': 'authorization failed.'})
+    return Response(json.dumps({'error': 'authorization failed.'}),
+                    content_type='application/xml')
 
 
 class StreamingResponse(Context, Response):
