@@ -37,7 +37,7 @@ class Api(object):
 
         """
         with closing(response):
-            for line in response.iter_lines(chunk_size=5):
+            for line in response.iter_lines(chunk_size=1):
                 if not line:
                     continue
                 yield json.loads(line)
