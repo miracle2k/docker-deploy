@@ -122,9 +122,24 @@ class DomainPlugin(Plugin):
     the strowger router.
     """
 
+    def post_setup(self, service, version):
+        # The first time strowger is setup, add routes to all domains
+        # that we know about.
+        if service.name != 'strowger' or service.deployment.id != 'system':
+            return
+        if service.versions:
+            return
+
+        for name, deployment in ctx.cintf.db.deployments.items():
+            ctx.cintf.get_plugin(DomainPlugin).on_globals_changed(deployment)
+
     def on_globals_changed(self, deployment):
         domains = deployment.globals.get('Domains', {})
         if not domains:
+            return
+
+        # If strowger is not setup, do nothing.
+        if not 'strowger' in ctx.cintf.db.deployments['system'].services:
             return
 
         api_ip = ctx.cintf.discover('strowger-api')
