@@ -18,6 +18,11 @@ from deploylib.daemon.db import DeployDB, Deployment
 from .context import ctx, set_context, Context
 
 
+# For old ZODB databases, support module alias
+import sys
+sys.modules['deploylib.daemon.host'] = sys.modules[__name__]
+
+
 class DeployError(Exception):
     """Unrecoverable error that causes the deploy process to abort.
 
