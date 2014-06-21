@@ -210,7 +210,6 @@ def create_app(controller):
 
     @app.teardown_request
     def after_request(exception):
-        print("request done runs now...")
         if exception:
             transaction.abort()
         else:
