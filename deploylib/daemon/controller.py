@@ -514,7 +514,7 @@ def cli(bind):
         import sys
         # if 'threading' in sys.modules:
         #         raise Exception('threading module loaded before patching!')
-        gevent.monkey.patch_all()
+        gevent.monkey.patch_all(subprocess=True)
 
     bind_opt = (bind or '0.0.0.0:5555').split(':', 1)
     if len(bind_opt) == 1:
