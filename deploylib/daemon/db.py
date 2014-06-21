@@ -4,12 +4,22 @@ from persistent import Persistent
 from persistent.list import PersistentList
 
 
+
 class DeployDB(object):
-    """Our database root object."""
+    """Old, not persistent root object; DEPRECATED: delete"""
 
     def __init__(self):
         self.deployments = BTrees.OOBTree.BTree()
         self.auth_key = None
+
+
+class DeployDBNew(Persistent):
+    """Our root."""
+
+    def __init__(self):
+        self.deployments = BTrees.OOBTree.BTree()
+        self.auth_key = None
+
 
 
 class Deployment(Persistent):

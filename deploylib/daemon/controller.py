@@ -5,6 +5,7 @@ import shlex
 from subprocess import check_output as run, CalledProcessError
 import random
 import binascii
+import BTrees.OOBTree
 import click
 import gevent
 import netifaces
@@ -14,7 +15,7 @@ import transaction
 from deploylib.daemon.api import create_app
 from deploylib.plugins import load_plugins, Plugin
 from deploylib.plugins.upstart import UpstartBackend
-from deploylib.daemon.db import DeployDB, Deployment
+from deploylib.daemon.db import Deployment, DeployDBNew
 from .context import ctx, set_context, Context
 
 
@@ -392,8 +393,26 @@ class Controller(object):
     def get_connection(self):
         self._zodb_connection = self._zodb_obj.open()
         if not getattr(self._zodb_connection.root, 'deploy', None):
-            self._zodb_connection.root.deploy = DeployDB()
+            self._zodb_connection.root.deploy = DeployDBNew()
+        self.migrate(self._zodb_connection.root)
         return self._zodb_connection, self._zodb_connection.root.deploy
+
+    CURRENT_DB_VERSION = 2
+    def migrate(self, root):
+        """Migrate database schema versions. There must be a cleaner
+        way of doing this."""
+        if not getattr(root, 'versions', None):
+            root.versions = BTrees.OOBTree.BTree()
+        no_prev_version = not 'deploydb' in root.versions
+        root.versions.setdefault('deploydb', self.CURRENT_DB_VERSION)
+
+        if no_prev_version or root.deploy.__class__.__name__ == 'DeployDB':
+            # Change db root object.
+            old = root.deploy
+            root.deploy = DeployDBNew()
+            root.deploy.__dict__ = old.__dict__.copy()
+            transaction.commit()
+            print "Upgraded Schema"
 
     def interface(self):
         """
