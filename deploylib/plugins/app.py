@@ -179,6 +179,7 @@ class AppPlugin(Plugin):
             ctx.log(line.strip())
             line = build_process.stdout.readline()
 
+        build_process.wait()
         if build_process.returncode:
             raise DeployError('the build failed with code %s' % build_process.returncode)
 
