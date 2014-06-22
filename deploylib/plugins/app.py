@@ -77,10 +77,13 @@ class AppPlugin(Plugin):
         # If this service version has no slug id attached, hold it back
         # for now and ask the client to provide the code.
         if not version.data.get('app_version_id'):
+            handled = ctx.cintf.run_plugins('needs_app_code', service, version)
+            if not handled:
+                # Communicate to the client it may upload the data
+                ctx.custom(**{'data-request': service.name, 'tag': 'git'})
+
             # No code has been provided yet, put service in "hold" status.
             service.hold('app code not available', version)
-            # Communicate to the client it may upload the data
-            ctx.custom(**{'data-request': service.name, 'tag': 'git'})
             return True
 
     def on_data_provided(self, service, files, data):

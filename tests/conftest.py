@@ -14,11 +14,35 @@ def controller(request, tmpdir):
         db_dir=str(tmpdir.join('db')),
         plugins=getattr(request.module, "controller_plugins", []))
 
+    # Test version of discovery client
+    controller.discover = lambda s: s
+
+    # By default we mock the whole backend. However, the test module
+    # can disable this.
+    if getattr(request.module, "mock_backend", True):
+        controller.backend = mock.Mock()
+        controller.backend.prepare.return_value = 'abc'
+        controller.backend.start.return_value = 'abc'
+
     def close():
         controller.close()
     request.addfinalizer(close)
 
     return controller
+
+
+class TestContext(Context):
+    def __init__(self, *a, **kw):
+        Context.__init__(self, *a, **kw)
+        self.items = []
+    def custom(self, **kwargs):
+        self.items.append(kwargs)
+        print(kwargs)
+    def filter(self, key, value=None):
+        items = [i for i in self.items if key in i]
+        if value:
+            items = [i for i in items if i[key] == value]
+        return items
 
 
 @pytest.fixture
@@ -28,22 +52,8 @@ def cintf(request, controller, tmpdir):
     os.environ['HOST_IP'] = '127.0.0.1'
 
     cintf = controller.interface()
-
     # Every cintf needs a context to operate
-    class TestContext(Context):
-        def custom(self, **kwargs):
-            print(kwargs)
     set_context(TestContext(cintf))
-
-    # By default we mock the whole backend. However, the test module
-    # can disable this.
-    if getattr(request.module, "mock_backend", True):
-        cintf.backend = mock.Mock()
-        cintf.backend.prepare.return_value = 'abc'
-        cintf.backend.start.return_value = 'abc'
-
-    # Test version of discovery client
-    cintf.discover = lambda s: s
 
     # Remove the upstart plugin - in the future we should enable plugins
     # for tests on an as-need basis.
@@ -55,6 +65,7 @@ def cintf(request, controller, tmpdir):
     def close():
         transaction.commit()
         cintf.close()
+        set_context(None)
     request.addfinalizer(close)
     return cintf
 

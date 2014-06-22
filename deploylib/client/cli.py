@@ -190,6 +190,8 @@ def deploy(app, service_file, deploy_id, create, force):
         if 'data-request' in event:
             requested_uploads.append(event)
             continue
+        if run_plugins('on_server_event', service_file, deploy_id, event):
+            continue
         raise ValueError(event)
 
     for event in requested_uploads:

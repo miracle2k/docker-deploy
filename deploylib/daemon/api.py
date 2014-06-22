@@ -34,18 +34,38 @@ def check_auth():
 
 class StreamingResponse(Context, Response):
 
+    mimetype = 'text/json'
+
     def __init__(self, controller, *a, **kw):
         Context.__init__(self, controller)
 
-        kw['mimetype'] = 'text/json'
+        kw['mimetype'] = self.mimetype
         def generator():
             for item in self.queue:
-                yield json.dumps(item)
-                yield "\n"
+                for i in self.item(item):
+                    yield i
         Response.__init__(self, stream_with_context(generator()), *a, **kw)
 
+    def item(self, item):
+        yield json.dumps(item)
+        yield "\n"
 
-def streaming(func):
+
+class TextStreamingResponse(StreamingResponse):
+    mimetype = 'text/plain'
+
+    def item(self, item):
+        if 'job' in item:
+            yield '-----> %s\n' % item['job']
+        elif 'log' in item:
+            yield '%s\n' % item['log']
+        elif 'error' in item:
+            yield 'Error: %s\n' % item['error']
+        else:
+            yield json.dumps(item) + '\n'
+
+
+def streaming(response_class=StreamingResponse):
     """Decorator to make a view streaming.
 
     If greenlets were native in Python we could probably have one stream
@@ -64,41 +84,43 @@ def streaming(func):
     parameters to the decorated-view function. A new controller instance
     we create ourselves.
     """
-    @functools.wraps(func)
-    def wrapped(*args, **kwargs):
-        from deploylib.daemon.controller import DeployError
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            from deploylib.daemon.controller import DeployError
 
-        ctx = StreamingResponse(None)
+            ctx = response_class(None)
 
-        request = _request_ctx_stack.top.request
-        app = _app_ctx_stack.top.app
-        def worker(controller):
-            # ZODB requirement: We need to create a new connection
-            # for a new thread
-            ctx.cintf = controller.interface()
-            set_context(ctx)
+            request = _request_ctx_stack.top.request
+            app = _app_ctx_stack.top.app
+            def worker(controller):
+                # ZODB requirement: We need to create a new connection
+                # for a new thread
+                ctx.cintf = controller.interface()
+                set_context(ctx)
 
-            try:
                 try:
-                    func(request, app, *args, **kwargs)
-                    transaction.commit()
-                except DeployError, e:
-                    traceback.print_exc()
-                    ctx.fatal('%s' % e)
-                    transaction.commit()
-                except Exception, e:
-                    traceback.print_exc()
-                    # Unexpected error cause a transaction rollback
-                    ctx.fatal('%s' % e)
-                    transaction.abort()
-                else:
-                    ctx.done()
-            finally:
-                ctx.cintf.close()
+                    try:
+                        func(request, app, *args, **kwargs)
+                        transaction.commit()
+                    except DeployError, e:
+                        traceback.print_exc()
+                        ctx.fatal('%s' % e)
+                        transaction.commit()
+                    except Exception, e:
+                        traceback.print_exc()
+                        # Unexpected error cause a transaction rollback
+                        ctx.fatal('%s' % e)
+                        transaction.abort()
+                    else:
+                        ctx.done()
+                finally:
+                    ctx.cintf.close()
 
-        gevent.spawn(worker, g.controller)
-        return ctx
-    return wrapped
+            gevent.spawn(worker, g.controller)
+            return ctx
+        return wrapped
+    return decorator
 
 
 def json_method(f):
@@ -147,7 +169,7 @@ def create():
 
 
 @api.route('/setup', methods=['POST'])
-@streaming
+@streaming()
 def setup_services(request, app):
     """This API does the following at once:
 
@@ -176,7 +198,7 @@ def setup_services(request, app):
 
 
 @api.route('/upload', methods=['POST'])
-@streaming
+@streaming()
 def upload(request, app):
     """Provide a binary file; usually an app that is supposed to be
     deployed.
