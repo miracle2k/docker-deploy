@@ -469,18 +469,22 @@ class Controller(object):
                     self.get_host_ip(), address, servicename), shell=True)
             except CalledProcessError as e:
                 raise ServiceDiscoveryError(e)
-        gevent.spawn(regger)
+        return gevent.spawn(regger)
 
     def run(self, host, port):
         # Register ourselves with service discovery
-        self.register('docker-deploy', int(port))
+        greenlet = self.register('docker-deploy', int(port))
 
-        # Start API
-        print('Serving API from :%s' % port)
-        app = create_app(self)
-        from gevent.wsgi import WSGIServer
-        server = WSGIServer((host, int(port)), app)
-        server.serve_forever()
+        try:
+            # Start API
+            print('Serving API from :%s' % port)
+            app = create_app(self)
+            from gevent.wsgi import WSGIServer
+            server = WSGIServer((host, int(port)), app)
+            server.serve_forever()
+
+        finally:
+            greenlet.kill()
 
 
 def run_controller(host, port):
