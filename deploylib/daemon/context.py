@@ -6,7 +6,11 @@ local = Local()
 ctx = local('ctx')
 
 def set_context(ctx):
-    local.ctx = ctx
+    if ctx is None:
+        if hasattr(local, 'ctx'):
+            del local.ctx
+    else:
+        local.ctx = ctx
 
 
 class Context(object):
