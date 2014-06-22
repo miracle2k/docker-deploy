@@ -138,9 +138,9 @@ class ControllerInterface(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
-            transaction.commit()
-        else:
             transaction.abort()
+        else:
+            transaction.commit()
         self.close()
 
     def create_deployment(self, deploy_id, fail=True):
