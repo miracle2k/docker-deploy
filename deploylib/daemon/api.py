@@ -15,7 +15,7 @@ from deploylib.plugins import load_plugins
 api = Blueprint('api', __name__)
 
 
-@api.before_request
+@api.before_app_request
 def check_auth():
     view = current_app.view_functions[request.endpoint]
     is_public = getattr(view, 'is_public', False)
