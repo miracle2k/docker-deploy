@@ -75,25 +75,34 @@ class GitReceivePlugin(Plugin):
         if not 'git' in version.definition['kwargs']:
             return False
 
-        config = GitReceiveConfig.load(ctx.cintf.db)
-
         # If the gitreceive service has not yet been setup, do so now
         if not 'gitreceive' in ctx.cintf.db.deployments['system'].services or True:
-            gitreceive_def = yaml.load(GITRECEIVE.format(
-                authkey=ctx.cintf.db.auth_key,
-                hostip=config.host_ip,
-                hostkey=''
-            ))
-            if not getattr(config, 'host_key', False):
-                config.host_key = generate_ssh_private_key()
-            gitreceive_def['env']['SSH_PRIVATE_KEYS'] = config.host_key
-            ctx.cintf.set_service(
-                'system', 'gitreceive', gitreceive_def, force=True)
+            self.setup_gitreceive()
 
-        url = 'git@{}:{d}/{s}'.format(
-            config.hostname, d=service.deployment.id, s=service.name)
-        ctx.custom(**{'gitreceive': service.name, 'url': url})
+        ctx.custom(**{'gitreceive': service.name, 'url': self.get_url(service)})
         return True
+
+    def setup_gitreceive(self):
+        """Setup the gitreceive SSH daemon.
+        """
+        config = GitReceiveConfig.load(ctx.cintf.db)
+        gitreceive_def = yaml.load(GITRECEIVE.format(
+            authkey=ctx.cintf.db.auth_key,
+            hostip=config.host_ip,
+            hostkey=''
+        ))
+        if not getattr(config, 'host_key', False):
+            config.host_key = generate_ssh_private_key()
+        gitreceive_def['env']['SSH_PRIVATE_KEYS'] = config.host_key
+        ctx.cintf.set_service(
+            'system', 'gitreceive', gitreceive_def, force=True)
+
+    def get_url(self, service):
+        """Generate a url for this service to our gitreceive daemon.
+        """
+        config = GitReceiveConfig.load(ctx.cintf.db)
+        return 'git@{}:{d}/{s}'.format(
+            config.hostname, d=service.deployment.id, s=service.name)
 
 
 ################################################################################
@@ -151,6 +160,14 @@ def api_checkrepo():
     return 'ok'
 
 
+@gitreceive_api.route('/setup', methods=['POST'])
+@streaming()
+def api_setup(request, app):
+    """Setup git receive.
+    """
+    ctx.cintf.controller.get_plugin(GitReceivePlugin).setup_gitreceive()
+
+
 @gitreceive_api.route('/add-key', methods=['GET'])
 @json_method
 def api_addkey(keydata):
@@ -202,6 +219,14 @@ def gitreceive_config(app, hostname, hostip):
     app.plugin_call(
         'get', 'gitreceive', 'set-config',
         {'hostname': hostname, 'hostip': hostip})
+
+
+@gitreceive_cli.command('setup')
+@click.pass_obj
+def gitreceive_addkey(app):
+    """Setup the gitreceive service.
+    """
+    app.plugin_call('post', 'gitreceive', 'setup', {})
 
 
 class LocalGitReceivePlugin(LocalPlugin):
