@@ -57,7 +57,7 @@ class Api(object):
 
     def plugin(self, method, plugin_name, func, **kwargs):
         return self.request(
-            'get', '%s/%s' % (plugin_name, func), json=kwargs)
+            method, '%s/%s' % (plugin_name, func), stream=True, json=kwargs)
 
     def list(self):
         return self.request('get', 'list')
@@ -160,7 +160,7 @@ class App(object):
         self.api = Api(deploy_url, auth)
 
     def plugin_call(self, method, plugin, func, kwargs):
-        single_result(self.api.plugin(method, plugin, func, **kwargs))
+        print_jobs(self.api.plugin(method, plugin, func, **kwargs))
 
 
 @click.group()
