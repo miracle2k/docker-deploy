@@ -17,6 +17,9 @@ api = Blueprint('api', __name__)
 
 @api.before_app_request
 def check_auth():
+    if request.routing_exception:
+        return
+
     view = current_app.view_functions[request.endpoint]
     is_public = getattr(view, 'is_public', False)
     if is_public:
