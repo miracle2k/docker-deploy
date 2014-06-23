@@ -29,7 +29,7 @@ def check_auth():
         return
 
     return Response(json.dumps({'error': 'authorization failed.'}),
-                    content_type='application/xml')
+                    content_type='application/xml', status=401)
 
 
 class StreamingResponse(Context, Response):
