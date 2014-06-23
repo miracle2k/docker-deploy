@@ -25,6 +25,7 @@ import subprocess
 from BTrees._OOBTree import OOTreeSet
 import click
 from flask import Blueprint, g, request
+from Crypto.PublicKey import RSA
 from persistent import Persistent
 import yaml
 from deploylib.daemon.api import json_method, streaming, TextStreamingResponse
@@ -43,6 +44,7 @@ class GitReceiveConfig(Persistent):
         self.auth_keys = OOTreeSet()
         self.hostname = 'deployhost'
         self.host_ip = ''
+        self.host_key = ''
 
 
 GITRECEIVE = """
@@ -55,6 +57,13 @@ env:
     SSH_PRIVATE_KEYS: ""
     CONTROLLER_AUTH_KEY: {authkey}
 """
+
+
+def generate_ssh_private_key():
+    """I would have preferred to use cryptography.io, but it doesn't
+    support a key export feature yet.
+    """
+    return RSA.generate(2048).exportKey()
 
 
 class GitReceivePlugin(Plugin):
@@ -75,8 +84,9 @@ class GitReceivePlugin(Plugin):
                 hostip=config.host_ip,
                 hostkey=''
             ))
-            gitreceive_def['env']['SSH_PRIVATE_KEYS']
-            print(gitreceive_def)
+            if not getattr(config, 'host_key', False):
+                config.host_key = generate_ssh_private_key()
+            gitreceive_def['env']['SSH_PRIVATE_KEYS'] = config.host_key
             ctx.cintf.set_service(
                 'system', 'gitreceive', gitreceive_def, force=True)
 
