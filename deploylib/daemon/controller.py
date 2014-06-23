@@ -495,9 +495,12 @@ def run_controller(host, port):
 
     # Initialize the controller on first run
     with controller.interface() as api:
-        if not 'system' in api.db.deployments:
+        set_context(Context(api))
+        if not api.db.auth_key:
             api.db.auth_key = binascii.hexlify(os.urandom(256//8)).decode('ascii')
-            set_context(Context(api))
+            print('Generated auth key: %s' % api.db.auth_key)
+
+        if not 'system' in api.db.deployments:
             api.create_deployment('system', fail=False)
             api.run_plugins('on_system_init')
             print "Initialized system."
