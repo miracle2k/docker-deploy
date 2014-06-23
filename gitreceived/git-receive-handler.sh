@@ -11,7 +11,7 @@ commit=$2
 controller=$(get_controller_ip) || exit 1
 
 # Check the repo exists
-result=$(http_request GET http://$controller/gitreceive/check-repo name=="$1") || exit 1
+result=$(http_request GET http://$controller/gitreceive/check-repo $AUTH name=="$1") || exit 1
 [ "$result" == "ok" ] || exit 1
 
 # Upload the data
@@ -27,7 +27,7 @@ function cleanup {
 trap cleanup EXIT
 
 cat - > $tmpfile
-http --ignore-stdin --check-status --follow --stream -f POST http://$controller/gitreceive/push-data name=="$repo" version=="$commit" tarball@$tmpfile 2>&1 | tee $logfile
+http --ignore-stdin --check-status --follow --stream -f POST http://$controller/gitreceive/push-data $AUTH name=="$repo" version=="$commit" tarball@$tmpfile 2>&1 | tee $logfile
 if (($? > 0)); then
     exit 1
 fi

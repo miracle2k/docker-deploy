@@ -11,6 +11,10 @@ fi
 echo "$0 called with $*" >> $RECEIVE_DEBUG
 
 
+# Give caller an httpie auth header to use.
+export AUTH="Authorization:$CONTROLLER_AUTH_KEY"
+
+
 
 function get_controller_ip() {
     controller=$(sdutil services docker-deploy 2>&1)
