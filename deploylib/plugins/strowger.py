@@ -100,6 +100,8 @@ class LocalStrowgerPlugin(LocalPlugin):
         p = lambda s: normpath(path(dirname(filename), s))
 
         for domain, data in domains.items():
+            if not data:
+                continue
             if 'cert' in data:
                 data['cert'] = open(p(data['cert']), 'r').read()
             if 'key' in data:
@@ -146,6 +148,8 @@ class StrowgerPlugin(Plugin):
         strowger = StrowgerClient(api_ip)
 
         for domain, data in domains.items():
+            if not data:
+                continue
             service_name = data.get('http')
             if not service_name:
                 continue

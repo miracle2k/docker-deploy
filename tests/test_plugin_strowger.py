@@ -77,3 +77,15 @@ class TestStrowger(object):
         assert result['config']['auth_type'] == 'digest'
         assert result['config']['http_auth'] == \
             {u'user': u'0554c44c150f03f1d9f21be67902a067'}
+
+    def test_ignore_empty_domains(self, cintf, responses):
+        """[Regression]  Do not fail on empty domains."""
+        cintf.set_service('system', 'strowger', {})
+
+        cintf.create_deployment('foo')
+        cintf.set_globals('foo', {
+            'Domains': {
+                'foo.org': None
+            }})
+
+        assert not responses.calls
