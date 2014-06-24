@@ -227,6 +227,7 @@ def upload(request, app):
 def create_app(controller):
     app = Flask(__name__)
     app.debug = True
+    app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
 
     @app.before_request
     def before_request():
