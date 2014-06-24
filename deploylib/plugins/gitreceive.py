@@ -52,7 +52,7 @@ image: elsdoerfer/gitreceive
 volumes:
     cache: /srv/repos
 host_ports:
-    '': "{hostip}:25"
+    '': "{hostip}:22"
 env:
     SSH_PRIVATE_KEYS: ""
     CONTROLLER_AUTH_KEY: {authkey}
