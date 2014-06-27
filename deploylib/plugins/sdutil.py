@@ -1,38 +1,79 @@
-"""Can wrap containers with sdutil for service discovery registration
-and consumption:
+"""sdutil is a command line client for discoverd-based service discovery.
 
-foo:
-    ports: [a, b, c]
-    sdutil:
-        # Register all mapped ports with discoverd
-        register: true
-        expose:
-            service: ENV_VAR
+This plugin makes it easy to add service discovery to your containers by:
 
-For now, requires ``/sdutil`` binary to exist in the container.
+1) Injecting the sdutil binary into containers
+2) Rewriting the command line so that sdutil is used.
 
-NOTE: This does not read the entrypoint from the image, so you need
-to re-declare the entrypoint in the service definition, or otherwise
-things will likely not work.
+sdutil can both register your service, as well as consume other services
+for you. In both cases, it wraps your actual executable. When consuming
+other services, it will provide the addresses of the service you require
+via environment variables, and it will start your executable only once
+all dependencies are available, and will restart whenever the leader
+of a service changes.
+
+Here is an example::
+
+    foo:
+        ports: [a, b, c]
+        sdutil:
+            register: true
+            expose:
+                bar: BAR
+
+``register`` will cause all ports of the service to be registered with
+discoverd; under names like ``deploy_id:foo:a``. ``expose`` will wait
+for ``bar`` to be available (``deploy_id:bar``), and put the address
+into the environment variable ``BAR``.
+
+If the unnamed default port is used, it will register as
+``deploy_id:foo``.
+
+If your container already contains sdutil and you do not want the plugin
+to build a new image to include it, you can specify the ``binary`` key::
+
+    foo:
+        sdutil:
+            register: true
+            binary: /bin/sdutil
+
 """
 
+from io import BytesIO
+from deploylib.daemon.context import ctx
 from deploylib.plugins import Plugin
 
 
 class SdutilPlugin(Plugin):
 
     def before_start(self, service, definition, runcfg, port_assignments):
-
         deploy_id = service.deployment.id
         cfg = definition['kwargs'].get('sdutil', {})
-        binary = cfg.get('binary', '/sdutil')
 
-        current_cmd = []
+        # To prefix the command line with sdutil we need to know what
+        # it is, and it might be encoded in the image only, not in the
+        # service definition.
+        entrypoint, cmd = self.read_image_cmdline(runcfg['image'])
+
+        # The values declared in the image are more important though.
         if runcfg['entrypoint']:
-            current_cmd.append(runcfg['entrypoint'])
+            entrypoint = runcfg['entrypoint']
         if runcfg['cmd']:
-            current_cmd.extend(runcfg['cmd'])
+            cmd = runcfg['cmd']
+
+        # Combine entrypoint and cmd
+        current_cmd = []
+        if entrypoint:
+            current_cmd.append(entrypoint)
+        if cmd:
+            current_cmd.extend(cmd)
         new_cmd = current_cmd
+
+        # Build a new image with the sdutil binary, or use existing path
+        if not 'binary' in cfg:
+            runcfg['image'], binary = self.add_to_image(runcfg['image'])
+        else:
+            binary = cfg.get('binary', '/sdutil')
 
         # Do service consumption first, such that we won't be registered
         # while still waiting for dependencies.
@@ -68,3 +109,26 @@ class SdutilPlugin(Plugin):
             runcfg['cmd'] = new_cmd[1:]
             runcfg['entrypoint'] = new_cmd[0]
 
+    def read_image_cmdline(self, imgname):
+        """Get Entrypoint and Cmd from image."""
+        docker = ctx.cintf.backend.client
+        ctx.log('Inspecting image %s' % imgname)
+        image_info = docker.inspect_image(imgname)
+        entrypoint = image_info['config']['Entrypoint']
+        cmd = image_info['config']['Cmd']
+        assert isinstance(cmd, list) or cmd is None
+        assert isinstance(entrypoint, list) or entrypoint is None
+        return entrypoint, cmd
+
+    def add_to_image(self, imgname):
+        """Builds a new docker image that contains sdutil.
+        """
+        docker = ctx.cintf.backend.client
+        ctx.job('Building version of %s with sdutil inside' % imgname)
+        newimg, _ = docker.build(fileobj=BytesIO("""
+FROM {old_img}
+ADD https://sdutil.s3.amazonaws.com/sdutil.linux /sdutil
+RUN chmod +x /sdutil
+""".format(old_img=imgname)))
+
+        return newimg, '/sdutil'
