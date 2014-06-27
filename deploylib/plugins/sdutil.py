@@ -37,8 +37,17 @@ to build a new image to include it, you can specify the ``binary`` key::
             register: true
             binary: /bin/sdutil
 
+
+
+Plugin configuration
+--------------------
+
+The environment variable ``SDUTIL_URL`` can be used to change where the
+binary that is inserted comes from. If not specified, an internet location
+is used.
 """
 
+import os
 from io import BytesIO
 from deploylib.daemon.context import ctx
 from deploylib.plugins import Plugin
@@ -125,12 +134,14 @@ class SdutilPlugin(Plugin):
     def add_to_image(self, imgname):
         """Builds a new docker image that contains sdutil.
         """
+        sdutil_url = os.environ.get(
+            'SDUTIL_URL', 'https://sdutil.s3.amazonaws.com/sdutil.linux')
         docker = ctx.cintf.backend.client
         ctx.job('Building version of %s with sdutil inside' % imgname)
         newimg, _ = docker.build(fileobj=BytesIO("""
 FROM {old_img}
-ADD https://sdutil.s3.amazonaws.com/sdutil.linux /sdutil
+ADD {sdutil_url} /sdutil
 RUN chmod +x /sdutil
-""".format(old_img=imgname)))
+""".format(old_img=imgname, sdutil_url=sdutil_url)))
 
         return newimg, '/sdutil'
