@@ -5,9 +5,10 @@ import pytest
 from werkzeug.datastructures import FileStorage
 from deploylib.daemon.controller import canonical_definition
 from deploylib.plugins.app import AppPlugin
+from deploylib.plugins.shelf import ShelfPlugin
 
 
-controller_plugins = [AppPlugin]
+controller_plugins = [AppPlugin, ShelfPlugin]
 
 
 @pytest.fixture(autouse=True)

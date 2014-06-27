@@ -8,11 +8,13 @@ from deploylib.daemon.context import ctx
 from deploylib.plugins.app import AppPlugin
 from deploylib.plugins.gitreceive import GitReceivePlugin, GitReceiveConfig, \
     parse_public_key
+from deploylib.plugins.shelf import ShelfPlugin
 
 
 from .test_plugin_app import patch_build
 
-controller_plugins = [AppPlugin, GitReceivePlugin]
+
+controller_plugins = [AppPlugin, GitReceivePlugin, ShelfPlugin]
 
 
 class TestGitReceive(object):

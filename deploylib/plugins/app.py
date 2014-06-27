@@ -12,6 +12,7 @@ from . import Plugin, LocalPlugin
 import yaml
 from deploylib.daemon.context import ctx
 from deploylib.daemon.controller import DeployError
+from deploylib.plugins.shelf import ShelfPlugin
 
 
 class LocalAppPlugin(LocalPlugin):
@@ -52,13 +53,6 @@ class LocalAppPlugin(LocalPlugin):
             }
 
 
-SHELF = """
-image: elsdoerfer/shelf
-cmd: -s /var/lib/shelf
-volumes: {data: /var/lib/shelf}
-"""
-
-
 class AppPlugin(Plugin):
     """Will run a 12-factor style app.
     """
@@ -70,9 +64,9 @@ class AppPlugin(Plugin):
             return False
 
         # If the shelf service has not yet been setup, do so now
-        if not 'shelf' in ctx.cintf.db.deployments['system'].services:
-            shelf_def = yaml.load(SHELF)
-            ctx.cintf.set_service('system', 'shelf', shelf_def, force=True)
+        shelf = ctx.cintf.get_plugin(ShelfPlugin)
+        if not shelf.is_setup():
+            shelf.setup_shelf()
 
         # If this service version has no slug id attached, hold it back
         # for now and ask the client to provide the code.
