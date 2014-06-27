@@ -49,6 +49,8 @@ class SdutilPlugin(Plugin):
     def before_start(self, service, definition, runcfg, port_assignments):
         deploy_id = service.deployment.id
         cfg = definition['kwargs'].get('sdutil', {})
+        if not cfg:
+            return
 
         # To prefix the command line with sdutil we need to know what
         # it is, and it might be encoded in the image only, not in the
