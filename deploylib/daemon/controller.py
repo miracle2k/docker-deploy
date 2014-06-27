@@ -434,10 +434,12 @@ class Controller(object):
         else:
             return False
 
-    def get_plugin(self, klass):
+    def get_plugin(self, klass, require=True):
         for plugin in self.plugins:
             if isinstance(plugin, klass):
                 return plugin
+        if not require:
+            return None
         raise IndexError(klass)
 
     def get_host_ip(self):
