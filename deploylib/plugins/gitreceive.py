@@ -223,7 +223,7 @@ def gitreceive_config(app, hostname, hostip):
 
 @gitreceive_cli.command('setup')
 @click.pass_obj
-def gitreceive_addkey(app):
+def gitreceive_setup(app):
     """Setup the gitreceive service.
     """
     app.plugin_call('post', 'gitreceive', 'setup', {})
