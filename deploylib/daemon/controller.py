@@ -85,8 +85,11 @@ def canonical_definition(name, definition):
         # docker-py accepts string as well and does the same split.
         # To allow our internal code to rely on one format, we normalize
         # to a list earlier.
+        # TODO: We might have to do a "/bin/sh" prefix here ourselves.
         canonical['cmd'] = shlex.split(canonical['cmd'])
     canonical['entrypoint'] = definition.pop('entrypoint', '')
+    if isinstance(canonical['entrypoint'], basestring):
+        canonical['entrypoint'] = shlex.split(canonical['entrypoint'])
     canonical['env'] = definition.pop('env', {})
     canonical['volumes'] = definition.pop('volumes', {})
     canonical['privileged'] = definition.pop('privileged', False)
@@ -334,7 +337,7 @@ class ControllerInterface(object):
 
         # Replace local variables in configuration
         runcfg['cmd'] = [i.format(**local_repl) for i in runcfg['cmd']]
-        runcfg['entrypoint'] = runcfg['entrypoint'].format(**local_repl)
+        runcfg['entrypoint'] = [i.format(**local_repl) for i in runcfg['entrypoint']]
         runcfg['env'] = {k: v.format(**local_repl) if isinstance(v, str) else v
                            for k, v in runcfg['env'].items()}
 
