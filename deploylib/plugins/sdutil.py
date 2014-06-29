@@ -75,7 +75,7 @@ class SdutilPlugin(Plugin):
         # Combine entrypoint and cmd
         current_cmd = []
         if entrypoint:
-            current_cmd.append(entrypoint)
+            current_cmd.extend(entrypoint)
         if cmd:
             current_cmd.extend(cmd)
         new_cmd = current_cmd
