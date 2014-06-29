@@ -23,6 +23,7 @@ def controller(request, tmpdir):
         controller.backend = mock.Mock()
         controller.backend.prepare.return_value = 'abc'
         controller.backend.start.return_value = 'abc'
+        mock_backend_docker(controller)
 
     def close():
         controller.close()
@@ -71,14 +72,16 @@ def cintf(request, controller, tmpdir):
 
 
 @pytest.fixture()
-def mock_backend_docker(cintf):
+def mock_backend_docker(controller):
     """Most backends have a .client attribute that is the Docker client.
 
     This will mock out the calls to Docker. It can be used as an alternative
     to mocking the whole backend.
     """
-    cintf.backend.client = mock.Mock()
-    cintf.backend.client.create_container.return_value = {'Id': 'abc'}
+    controller.backend.client = mock.Mock()
+    controller.backend.client.create_container.return_value = {'Id': 'abc'}
+    controller.backend.client.inspect_image.return_value = {}
+    controller.backend.client.build.return_value = ('built-id', 'build-output')
 
 
 @pytest.fixture()

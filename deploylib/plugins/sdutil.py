@@ -118,7 +118,7 @@ class SdutilPlugin(Plugin):
         # Be sure to replace both cmd and any existing entrypoint
         if new_cmd != current_cmd:
             runcfg['cmd'] = new_cmd[1:]
-            runcfg['entrypoint'] = new_cmd[0]
+            runcfg['entrypoint'] = new_cmd[:1]
 
     def read_image_cmdline(self, imgname):
         """Get Entrypoint and Cmd from image."""
