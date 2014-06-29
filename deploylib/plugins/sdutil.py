@@ -123,6 +123,7 @@ class SdutilPlugin(Plugin):
     def read_image_cmdline(self, imgname):
         """Get Entrypoint and Cmd from image."""
         docker = ctx.cintf.backend.client
+        ctx.cintf.backend.pull_image(imgname)
         ctx.log('Inspecting image %s' % imgname)
         image_info = docker.inspect_image(imgname)
         entrypoint = image_info['config']['Entrypoint']
