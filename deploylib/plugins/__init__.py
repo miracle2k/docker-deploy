@@ -24,6 +24,10 @@ class Plugin(object):
         Plugins have a chance to rewrite the service definition. Used
         for example to enable apps via the slugrunner image.
 
+    provide_vars()
+        Deployment-specific, non-environment variables can be provided
+        here, and will replace format strings ala {var}.
+
     provide_environment()
         When the docker container is created, and the environment variables
         are being put together, this gives a plugin the chance to add some

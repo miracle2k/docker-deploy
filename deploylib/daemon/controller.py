@@ -248,6 +248,8 @@ class ControllerInterface(object):
         host_lan_ip = self.get_host_ip()
         local_repl['HOST'] = host_lan_ip
         local_repl['DEPLOY_ID'] = deployment.id
+        self.run_plugins(
+            'provide_vars', service, version, definition, local_repl)
 
         def replvars(s):
             if not isinstance(s, basestring):
@@ -315,7 +317,7 @@ class ControllerInterface(object):
 
         # The environment variables
         runcfg['env'] = ((version.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
-        runcfg['env'].update(local_repl.copy())
+        runcfg['env']['DEPLOY_ID'] = deployment.id
         runcfg['env']['DISCOVERD'] = '%s:1111' % host_lan_ip
         runcfg['env']['ETCD'] = 'http://%s:4001' % host_lan_ip
         runcfg['env'].update(definition['env'])

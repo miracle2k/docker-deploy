@@ -32,6 +32,14 @@ def controller(request, tmpdir):
     return controller
 
 
+def get_last_runcfg(cintf):
+    # runcfg used with last backend.start() mock call.
+    first_call = cintf.backend.start.mock_calls[0]
+    args = first_call[1]
+    runcfg_used = args[1]
+    return runcfg_used
+
+
 class TestContext(Context):
     def __init__(self, *a, **kw):
         Context.__init__(self, *a, **kw)

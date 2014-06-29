@@ -1,5 +1,6 @@
 import pytest
 from deploylib.plugins.sdutil import SdutilPlugin
+from tests.conftest import get_last_runcfg
 
 
 controller_plugins = [SdutilPlugin]
@@ -11,14 +12,6 @@ def default_image_inspect(cintf):
     cintf.backend.client.inspect_image.return_value = {
         'config': {'Entrypoint': ['/imgentry'], 'Cmd': ['imgcmd']}
     }
-
-
-def get_last_runcfg(cintf):
-    # runcfg used with last backend.start() mock call.
-    first_call = cintf.backend.start.mock_calls[0]
-    args = first_call[1]
-    runcfg_used = args[1]
-    return runcfg_used
 
 
 class TestSdutilPlugin(object):
