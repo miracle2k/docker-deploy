@@ -8,7 +8,6 @@ controller_plugins = [GeneratePlugin]
 class TestGenerate(object):
 
     def test_generate(self, cintf):
-        # If the strowger router has not yet been setup, do nothing
         cintf.create_deployment('foo')
         cintf.set_globals('foo', {'Generate': {'Foo': {}}})
 
