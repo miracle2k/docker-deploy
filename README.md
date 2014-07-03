@@ -99,6 +99,64 @@ Describing regular services
 (explain how a docker service is written in YAML, and global environment vars)
 
 
+Ports
+~~~~~
+
+Ports are the endpoints that a service exposes. The first rule is that they
+are named for clarity::
+    
+    elsdoerfer/rethinkdb:
+        ports: {driver: 28015, cluster: 29015, web: 8080}
+
+Here the container is telling the controller on which ports it's services 
+can be found. Alternatively, a service may want to be told by the controller
+where it should expose itself::
+
+    elsdoerfer/rethinkdb:
+        cmd: /bin/sh -c rethinkdb --driver-port $PORT_DRIVER ...
+        ports: {driver: 'assign', cluster: 'assign', web: 'assign'}
+        
+The controller will insert environment variables in the form of
+``PORT_{name}`` to tell the service where it will be looked for. If you only
+use assigned ports, this can be shortened::
+
+    elsdoerfer/rethinkdb:
+        ports: [driver, cluster, web]
+        
+Assigned ports are often a superior solution, because these ports may need
+to be mapped for access, and if you are running two containers that expose
+port ``8080``, one of them will need to be mapped to a different port number;
+now the port the service binds to and the port that needs to be registered
+with service discovery are different. We'll explore this later in more
+detail.
+
+If you do not define a port, there is always a single default port, given
+as the environment variable ``PORT``.
+
+There are two visibility groups for ports: LAN and WAN. By default, every
+port is a LAN port, accessibly to other services in your cluster. If you
+want a service to be accessible to the internet, make it a WAN port::
+
+    elsdoerfer/strowger:
+        ports: [http, api]
+        wan_ports: {http: 80}
+         
+LAN and WAN are concepts. There are different ways to implement these
+concepts:
+
+- The plugin `host_lan` maps all LAN ports to an interface on the host.
+  This interface may be ``docker0`` for a single host cluster, or a custom
+  LAN interface that you have made available within your cluster. You could
+  also use the WAN interface of your host, and use firewall rules, or simply
+  authentication to protect your LAN services. 
+  
+- A `container_lan` plugin could ask all services to bind their ports to a
+  LAN interface that is available in containers. They could then be
+  addressed using the container IP address.
+  
+In both cases, WAN ports are mapped to the host WAN interface.
+
+
 12-factor apps
 --------------
 
