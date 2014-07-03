@@ -1,5 +1,6 @@
 import json
 from deploylib.plugins.flynn_postgres import FlynnPostgresPlugin
+from tests.conftest import get_last_runcfg
 
 
 controller_plugins = [FlynnPostgresPlugin]
@@ -58,6 +59,5 @@ class TestFlynnPostgres(object):
         # Deploy a service
         cintf.set_service('foo', 'a-service', {})
         # Have a look at the vars used
-        call = cintf.backend.start.mock_calls[0]
-        runcfg = call[1][1]
+        runcfg = get_last_runcfg(cintf)
         assert runcfg['env']['POSTGRES_DATABASE'] == 'foo'

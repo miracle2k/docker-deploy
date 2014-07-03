@@ -230,10 +230,10 @@ class ControllerInterface(object):
         is_new = deployment.set_resource(name, data)
         self.run_plugins('on_resource_changed', deployment, name, data)
 
-    def create_container(self, service, version):
-        """Create the docker container that the service(-version) defines.
+    def generate_runcfg(self, service, version):
+        """Given a service version, generate a final controller-independent
+        runcfg structure as used by the backends.
         """
-
         deployment = service.deployment
 
         # Start by letting plugins rewrite the definition
@@ -328,10 +328,25 @@ class ControllerInterface(object):
                            for k, v in runcfg['env'].items()}
         self.run_plugins('provide_environment', deployment, definition, runcfg['env'])
 
+        # Replace local variables in configuration
+        runcfg['cmd'] = [i.format(**local_repl) for i in runcfg['cmd']]
+        runcfg['entrypoint'] = [i.format(**local_repl) for i in runcfg['entrypoint']]
+        runcfg['env'] = {k: v.format(**local_repl) if isinstance(v, str) else v
+                           for k, v in runcfg['env'].items()}
+
+        return runcfg, definition, port_assignments
+
+    def create_container(self, service, version):
+        """Create the docker container that the service(-version) defines.
+        """
+
+        runcfg, definition, port_assignments = \
+            self.generate_runcfg(service, version)
+
         # Construct a name; for now, for informative purposes only; later
         # this might be what we use for matching.
         runcfg['name'] = "{deploy}-{service}-{version}-{instance}".format(
-            deploy=deployment.id, service=service.name,
+            deploy=service.deployment.id, service=service.name,
             version=len(service.versions)+1,
             instance=service.latest.instance_count if service.latest else 1)
 
@@ -340,14 +355,8 @@ class ControllerInterface(object):
         self.run_plugins(
             'before_start', service, definition, runcfg, port_assignments)
 
-        # Replace local variables in configuration
-        runcfg['cmd'] = [i.format(**local_repl) for i in runcfg['cmd']]
-        runcfg['entrypoint'] = [i.format(**local_repl) for i in runcfg['entrypoint']]
-        runcfg['env'] = {k: v.format(**local_repl) if isinstance(v, str) else v
-                           for k, v in runcfg['env'].items()}
-
         # Create the new container
-        instance_id = self.backend.prepare(service, runcfg)
+        instance_id = self.backend.prepare(runcfg, service)
 
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
@@ -357,7 +366,7 @@ class ControllerInterface(object):
             service.instances.remove(inst)
 
         # Run the container
-        instance_id = self.backend.start(service, runcfg, instance_id)
+        instance_id = self.backend.start(runcfg, service, instance_id)
 
         service.append_version(version)
         service.append_instance(instance_id)

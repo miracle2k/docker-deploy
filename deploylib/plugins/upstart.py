@@ -35,9 +35,9 @@ class UpstartBackend(DockerOnlyBackend):
     """Create upstart files along with docker containers.
     """
 
-    def start(self, service, runcfg, instance_id):
+    def start(self, runcfg, service, instance_id):
         self.write_upstart_for_service(service.deployment, runcfg)
-        return DockerOnlyBackend.start(self, service, runcfg, instance_id)
+        return DockerOnlyBackend.start(self, runcfg, service, instance_id)
 
     def terminate(self, (instance_id, name)):
         rm_upstart_conf(name)

@@ -38,6 +38,9 @@ class Backend(object):
     terminate(instance id)
         Remove the instance.
 
+    once(runcfg) - Streaming output
+        Run a one-time command.
+
     This design is flexible enough to allow a supervisor based backend to
     choose whether a service instance should be kept up by way of
     restarting the same container (i.e. an instance is mapped to a single
@@ -45,16 +48,19 @@ class Backend(object):
     every time the instance comes up.
     """
 
-    def prepare(self, service, runcfg):
+    def prepare(self, runcfg, service):
         pass
 
-    def start(self, service, runcfg, instance_id=None):
+    def start(self, runcfg, service, instance_id=None):
         raise NotImplementedError()
 
     def terminate(self, instance_id):
         raise NotImplementedError()
 
     def status(self, instance_id):
+        raise NotImplementedError()
+
+    def once(self, runcfg):
         raise NotImplementedError()
 
 
@@ -70,7 +76,7 @@ class DockerOnlyBackend(object):
         self.client = docker.Client(
             base_url=docker_url, version='1.6', timeout=10)
 
-    def prepare(self, service, runcfg):
+    def prepare(self, runcfg, service):
         cid = self.create_container(runcfg)
 
         # Make sure the volumes exist
@@ -80,7 +86,7 @@ class DockerOnlyBackend(object):
 
         return cid
 
-    def start(self, service, runcfg, instance_id):
+    def start(self, runcfg, service, instance_id):
         self.client.start(
             runcfg['name'],
             binds=runcfg['volumes'],
@@ -94,6 +100,15 @@ class DockerOnlyBackend(object):
         except:
             pass
 
+    def once(self, runcfg):
+        container = self.create_container(runcfg)
+        self.client.start(
+            container,
+            binds=runcfg['volumes'],
+            port_bindings=runcfg['ports'],
+            privileged=runcfg['privileged'])
+        return self.client.wait(container)
+
     def pull_image(self, imgname):
         try:
             self.client.inspect_image(imgname)
@@ -104,23 +119,24 @@ class DockerOnlyBackend(object):
     def create_container(self, runcfg):
         # If the given name already exists, we need to delete the container
         # first, otherwise, we'll definitely fail.
-        try:
-            self.client.inspect_container(runcfg['name'])
-        except docker.APIError:
-            pass
-        else:
-            print "Removing existing container %s" % runcfg['name']
-            self.client.kill(runcfg['name'])
-            self.client.remove_container(runcfg['name'])
+        if runcfg.get('name'):
+            try:
+                self.client.inspect_container(runcfg['name'])
+            except docker.APIError:
+                pass
+            else:
+                print "Removing existing container %s" % runcfg['name']
+                self.client.kill(runcfg['name'])
+                self.client.remove_container(runcfg['name'])
 
         # If the image does not exist yet, pull it
         self.pull_image(runcfg['image'])
 
         # Create the container
-        print "Creating container %s" % runcfg['name']
+        print "Creating container %s" % runcfg.get('name', '(unnamed)')
         result = self.client.create_container(
             image=runcfg['image'],
-            name=runcfg['name'],
+            name=runcfg.get('name'),
             entrypoint=runcfg['entrypoint'],
             command=runcfg['cmd'],
             environment=runcfg['env'],

@@ -50,12 +50,24 @@ is used.
 import os
 from io import BytesIO
 from deploylib.daemon.context import ctx
+from deploylib.daemon.controller import DeployError
 from deploylib.plugins import Plugin
 
 
 class SdutilPlugin(Plugin):
 
+    def before_once(self, service, definition, runcfg):
+        self._process(service, definition, runcfg, skip_register=True)
+
     def before_start(self, service, definition, runcfg, port_assignments):
+        self._process(service, definition, runcfg, port_assignments)
+
+    def _process(self, service, definition, runcfg, port_assignments=None,
+                 skip_register=False):
+        """In the case of a one-off job, we only want to provide the
+        service discovery consumption, not the registration.
+        """
+
         deploy_id = service.deployment.id
         cfg = definition['kwargs'].get('sdutil', {})
         if not cfg:
@@ -97,7 +109,7 @@ class SdutilPlugin(Plugin):
             new_cmd = [binary, 'expose'] + deps + new_cmd
 
         # Support registering all ports
-        if cfg.get('register'):
+        if not skip_register and cfg.get('register'):
             regs = []
             for pname, map in port_assignments.items():
                 if not map['host']:
@@ -144,5 +156,8 @@ FROM {old_img}
 ADD {sdutil_url} /sdutil
 RUN chmod +x /sdutil
 """.format(old_img=imgname, sdutil_url=sdutil_url)))
+
+        if not newimg:
+            raise DeployError('Build failed')
 
         return newimg, '/sdutil'

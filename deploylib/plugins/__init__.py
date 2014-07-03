@@ -20,6 +20,10 @@ class Plugin(object):
 
     post_setup()
 
+    setup_resource()
+        Before a plugin wants to setup a resource it should call this,
+        and delay setup if a truth value is returned.
+
     rewrite_service()
         Plugins have a chance to rewrite the service definition. Used
         for example to enable apps via the slugrunner image.
@@ -38,6 +42,9 @@ class Plugin(object):
     before_start()
         Called just before an instance is created. Plugins can modify the
         runcfg.
+
+    before_once()
+        Like before_start(), but called when one-off jobs are created.
     """
 
     priority = 100

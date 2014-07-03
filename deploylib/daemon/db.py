@@ -39,6 +39,14 @@ class Deployment(Persistent):
         # and global things like Domain setup which exist on their own.
         self.globals = {}
 
+    def has_service(self, name, allow_hold=False):
+        """True if a service with the name exists and is ready."""
+        if not name in self.services:
+            return False
+        if not allow_hold and self.services[name].held:
+            return False
+        return True
+
     def set_service(self, name):
         """Store a new service, or add a new version to an existing
         service.
@@ -81,6 +89,12 @@ class DeployedService(Persistent):
         if not self.versions:
             return None
         return self.versions[-1]
+
+    @property
+    def version(self):
+        if self.held:
+            return self.held_version
+        return self.latest
 
     def hold(self, reason, version):
         """Held services are registered with the deployment and will be

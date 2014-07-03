@@ -23,6 +23,7 @@ def controller(request, tmpdir):
         controller.backend = mock.Mock()
         controller.backend.prepare.return_value = 'abc'
         controller.backend.start.return_value = 'abc'
+        controller.backend.once.return_value = 0
         mock_backend_docker(controller)
 
     def close():
@@ -32,11 +33,14 @@ def controller(request, tmpdir):
     return controller
 
 
-def get_last_runcfg(cintf):
-    # runcfg used with last backend.start() mock call.
-    first_call = cintf.backend.start.mock_calls[0]
-    args = first_call[1]
-    runcfg_used = args[1]
+def get_last_runcfg(cintf, call='start'):
+    # runcfg used with last backend.start() or other mock call.
+    calls = getattr(cintf.backend, call).mock_calls
+    if not calls:
+        return None
+    first_call = calls[-1]
+    name, args, kwargs = first_call
+    runcfg_used = args[0]
     return runcfg_used
 
 
@@ -88,6 +92,8 @@ def mock_backend_docker(controller):
     """
     controller.backend.client = mock.Mock()
     controller.backend.client.create_container.return_value = {'Id': 'abc'}
+    controller.backend.client.start.return_value = {'Id': 'abc'}
+    controller.backend.client.wait.return_value = 0
     controller.backend.client.inspect_image.return_value = {}
     controller.backend.client.build.return_value = ('built-id', 'build-output')
 

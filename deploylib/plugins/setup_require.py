@@ -34,19 +34,7 @@ class RequiresPlugin(Plugin):
         if not requirements:
             return
 
-        deployment = service.deployment
-
-        # Make sure all requirements are available
-        missing_deps = []
-        for dep in requirements:
-            if dep in deployment.resources:
-                continue
-            if dep in deployment.services:
-                if not deployment.services[dep].held:
-                    continue
-
-            missing_deps.append(dep)
-
+        missing_deps = self.check_deps(service.deployment, requirements)
         if missing_deps:
             # No they are not, hold this service for now
             service.hold(
@@ -56,6 +44,32 @@ class RequiresPlugin(Plugin):
 
         # Yes they are, go ahead
         return
+
+    def setup_resource(self, deployment, name, data):
+        """Support holding back other resources via a require key as well.
+        """
+        if not 'require' in data:
+            return
+
+        if self.check_deps(deployment, data['require']):
+            # Dependencies are missing, say this should be held back
+            return True
+
+    def check_deps(self, deployment, requirements):
+        # Make sure all requirements are available
+        missing_deps = []
+        for dep in iterablify(requirements):
+            if dep in deployment.resources:
+                continue
+            # TODO: Ask plugins if a resource is available; this allows
+            # for dynamic resources.
+            if dep in deployment.services:
+                if not deployment.services[dep].held:
+                    continue
+
+            missing_deps.append(dep)
+
+        return missing_deps
 
     def post_setup(self, service, _):
         if not service.held:
