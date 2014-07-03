@@ -245,6 +245,7 @@ class ControllerInterface(object):
             return random.randint(10000, 65000)
 
         local_repl = {}
+        extra_env = {}
         host_lan_ip = self.get_host_ip()
         local_repl['HOST'] = host_lan_ip
         local_repl['DEPLOY_ID'] = deployment.id
@@ -314,12 +315,14 @@ class ControllerInterface(object):
                 # example as part of the command line or env definition.
                 var_name = 'PORT'if port_name == "" else 'PORT_%s' % port_name.upper()
                 local_repl[var_name] = container_port
+                extra_env[var_name] = container_port
 
         # The environment variables
         runcfg['env'] = ((version.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
         runcfg['env']['DEPLOY_ID'] = deployment.id
         runcfg['env']['DISCOVERD'] = '%s:1111' % host_lan_ip
         runcfg['env']['ETCD'] = 'http://%s:4001' % host_lan_ip
+        runcfg['env'].update(extra_env)
         runcfg['env'].update(definition['env'])
         runcfg['env'] = {replvars(k): replvars(v)
                            for k, v in runcfg['env'].items()}
