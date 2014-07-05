@@ -484,8 +484,13 @@ class Controller(object):
         """
         def regger():
             try:
-                run('DISCOVERD={0}:1111 sdutil register {2}:{1}'.format(
-                    self.get_host_ip(), address, servicename), shell=True)
+                cip = os.environ.get('CONTROLLER_IP')
+                if cip:
+                    opts = '-h %s' % cip
+                else:
+                    opts = ''
+                run('DISCOVERD={0}:1111 sdutil register {opts}  {2}:{1}'.format(
+                    self.get_host_ip(), address, servicename, opts=opts), shell=True)
             except CalledProcessError as e:
                 raise ServiceDiscoveryError(e)
         return gevent.spawn(regger)
