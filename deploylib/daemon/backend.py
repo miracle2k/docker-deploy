@@ -18,6 +18,7 @@ Possible backends that I can imagine right now are:
 
 import os
 import docker
+import docker.errors
 from os import path
 
 
@@ -112,7 +113,7 @@ class DockerOnlyBackend(object):
     def pull_image(self, imgname):
         try:
             self.client.inspect_image(imgname)
-        except docker.APIError:
+        except docker.errors.APIError:
             print "Pulling image %s" % imgname
             print self.client.pull(imgname)
 
@@ -122,7 +123,7 @@ class DockerOnlyBackend(object):
         if runcfg.get('name'):
             try:
                 self.client.inspect_container(runcfg['name'])
-            except docker.APIError:
+            except docker.errors.APIError:
                 pass
             else:
                 print "Removing existing container %s" % runcfg['name']

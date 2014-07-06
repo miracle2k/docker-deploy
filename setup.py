@@ -16,7 +16,7 @@ setup(
     packages=find_packages(),
     package_data={'': ['Bootstrap']},
     install_requires=[
-        'docker-py>=0.3.0',
+        'docker-py>=0.3.2',
         'click>=2.0',
         'flask>=0.10',
         'netifaces>=0.10',
