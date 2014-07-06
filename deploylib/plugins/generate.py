@@ -13,7 +13,7 @@ the environment::
 
 import os
 import binascii
-from zope.generations.generations import PersistentDict
+from persistent.mapping import PersistentMapping
 from deploylib.plugins import Plugin
 
 
@@ -24,7 +24,7 @@ class GeneratePlugin(Plugin):
         if not keys:
             return
 
-        store = deployment.data.setdefault('Generate', PersistentDict())
+        store = deployment.data.setdefault('Generate', PersistentMapping())
         for key, options in keys.items():
             if key in store:
                 # Has already been generated
