@@ -5,11 +5,12 @@ store compiled slugs.
 """
 
 import os
+from os.path import abspath
 import subprocess
 import tempfile
 
 from . import Plugin, LocalPlugin
-import yaml
+import click
 from deploylib.daemon.context import ctx
 from deploylib.daemon.controller import DeployError
 from deploylib.plugins.shelf import ShelfPlugin
@@ -19,6 +20,9 @@ class LocalAppPlugin(LocalPlugin):
     """Base interface for a plugin that runs as part of the CLI
     on the client.
     """
+
+    def provide_cli(self, group):
+        group.add_command(app_cli)
 
     def provide_data(self, service, what):
         """Server says it is missing data for the given service.
@@ -195,4 +199,37 @@ class AppPlugin(Plugin):
         env.update(version.definition['env'])
         return env
 
+
+
+################################################################################
+
+
+@click.group('app')
+def app_cli():
+    """Manage the app plugin."""
+    pass
+
+
+@app_cli.command('add-search-dir')
+@click.argument('dir', type=click.Path(file_okay=False, exists=True))
+@click.pass_obj
+def app_addsearchpath(app, dir):
+    """Register a local directory that is searched for applications.
+    """
+    dir = abspath(dir)
+
+    # What a pain to make sure the config is initialized properly
+    if not app.config.has_section('app'):
+        app.config.add_section('app')
+    if not app.config.has_option('app', 'search-path'):
+        app.config.set('app', 'search-path', '')
+
+    path = app.config.get('app', 'search-path').split(':')
+    if not dir in path:
+       path.append(dir)
+    app.config.set('app', 'search-path', ':'.join(path))
+    app.config.save()
+
+    for p in path:
+        print p
 
