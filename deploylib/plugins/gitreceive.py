@@ -3,22 +3,34 @@
 This will automatically run a "gitreceive" ssh server as part of the
 "system" deployment.
 
-Currently, you need to provide the host ip to map to as a configuration
-value, to not conflict with the regular SSH service you are probably
-also running on the host.
+To make "git push" work it needs some minimal configuration: The git
+urls used need to be routed to the actual service. There are two options:
 
-In the future, I imagine it might work something like this::
+
+Proxy + Service discovery
+-------------------------
+
+The gitreceive service will register with service discovery under the
+name ``gitreceive``, and you could set up a TCP proxy to it:
 
     Domains:
         githost:
             # Register this domain/backend route with strowger
-            tcp: 22, backend
-            # But only for strowger instances serving the second realm
-            realm: second
+            tcp: 22, gitreceive
 
-Have a "realm" plugin that will automatically setup a strowger instances
-for each realm, each running on separate ips, chosen from an IP pool,
-spread among multiple hosts.
+
+You need to set the gitreceive "hostname" option to "githost".
+
+
+WAN mapping
+------------
+
+You can have the gitreceive service to declare a WAN port directly
+using the "wan_port" option (e.g. ``secondip:22``).
+
+You need to set the gitreceive "hostname" option to point to something
+sensible as well.
+
 """
 
 import subprocess
@@ -43,7 +55,7 @@ class GitReceiveConfig(Persistent):
     def __init__(self):
         self.auth_keys = OOTreeSet()
         self.hostname = 'deployhost'
-        self.host_ip = ''
+        self.wan_port = ''
         self.host_key = ''
 
 
@@ -51,11 +63,11 @@ GITRECEIVE = """
 image: elsdoerfer/gitreceive
 volumes:
     cache: /srv/repos
-host_ports:
-    '': "{hostip}:22"
 env:
     SSH_PRIVATE_KEYS: ""
     CONTROLLER_AUTH_KEY: {authkey}
+sdutil:
+    register: true
 """
 
 
@@ -88,12 +100,13 @@ class GitReceivePlugin(Plugin):
         config = GitReceiveConfig.load(ctx.cintf.db)
         gitreceive_def = yaml.load(GITRECEIVE.format(
             authkey=ctx.cintf.db.auth_key,
-            hostip=config.host_ip,
             hostkey=''
         ))
         if not getattr(config, 'host_key', False):
             config.host_key = generate_ssh_private_key()
         gitreceive_def['env']['SSH_PRIVATE_KEYS'] = config.host_key
+        if getattr(config, 'wan_port'):
+            gitreceive_def['host_ports'] = {'': config.wan_port}
         ctx.cintf.set_service(
             'system', 'gitreceive', gitreceive_def, force=True)
 
@@ -180,14 +193,14 @@ def api_addkey(keydata):
 
 @gitreceive_api.route('/set-config', methods=['GET'])
 @json_method
-def api_setconfig(hostname=None, hostip=None):
+def api_setconfig(hostname=None, wan_port=None):
     """Change gitreceive configuration
     """
     config = GitReceiveConfig.load(g.cintf.db)
     if hostname:
         config.hostname = hostname
-    if hostip:
-        config.host_ip = hostip
+    if wan_port:
+        config.wan_port = wan_port
     return {'job': 'Updated configuration, manual restart required'}
 
 
@@ -211,14 +224,14 @@ def gitreceive_addkey(app, keyfile):
 
 @gitreceive_cli.command('config-set')
 @click.option('--hostname')
-@click.option('--hostip')
+@click.option('--wan-port')
 @click.pass_obj
-def gitreceive_config(app, hostname, hostip):
+def gitreceive_config(app, hostname, wan_port):
     """Set gitreceive configuration.
     """
     app.plugin_call(
         'get', 'gitreceive', 'set-config',
-        {'hostname': hostname, 'hostip': hostip})
+        {'hostname': hostname, 'wan_port': wan_port})
 
 
 @gitreceive_cli.command('setup')
