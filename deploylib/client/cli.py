@@ -79,20 +79,6 @@ class Api(object):
             'data': json.dumps(data)}, stream=True)
 
 
-PLUGINS = load_plugins(LocalPlugin)
-
-def run_plugins(method_name, *args, **kwargs):
-    for plugin in PLUGINS:
-        method = getattr(plugin, method_name, None)
-        if not method:
-            continue
-        result = method(*args, **kwargs)
-        if not result is None:
-            return result
-    else:
-        return False
-
-
 def with_printer(event_stream):
     """Given a stream of server events, will output the default
     one that relate to the process messages, will pass through those
@@ -141,6 +127,8 @@ class Config(ConfigParser.ConfigParser):
 
 class App(object):
     def __init__(self):
+        self.PLUGINS = load_plugins(LocalPlugin, self)
+
         self.config = config = Config()
 
         # Determine the server to interact with
@@ -172,14 +160,28 @@ class App(object):
 
         self.api = Api(deploy_url, auth)
 
+    def run_plugins(self, method_name, *args, **kwargs):
+        for plugin in self.PLUGINS:
+            method = getattr(plugin, method_name, None)
+            if not method:
+                continue
+            result = method(*args, **kwargs)
+            if not result is None:
+                return result
+        else:
+            return False
+
     def plugin_call(self, method, plugin, func, kwargs):
         print_jobs(self.api.plugin(method, plugin, func, **kwargs))
 
 
+# TODO: Get rid of this global, only used to init the CLI
+APP = App()
+
 @click.group()
 @click.pass_context
 def main(ctx):
-    ctx.obj = App()
+    ctx.obj = APP
 
 
 @main.command()
@@ -192,7 +194,7 @@ def deploy(app, service_file, deploy_id, create, force):
     """Take a template, deploy it to the server.
     """
     api = app.api
-    service_file = ServiceFile.load(service_file, plugin_runner=run_plugins)
+    service_file = ServiceFile.load(service_file, plugin_runner=app.run_plugins)
 
     if create:
         if single_result(api.create(deploy_id)):
@@ -203,12 +205,12 @@ def deploy(app, service_file, deploy_id, create, force):
         if 'data-request' in event:
             requested_uploads.append(event)
             continue
-        if run_plugins('on_server_event', service_file, deploy_id, event):
+        if app.run_plugins('on_server_event', service_file, deploy_id, event):
             continue
         raise ValueError(event)
 
     for event in requested_uploads:
-        filedata = run_plugins(
+        filedata = app.run_plugins(
             'provide_data',
             service_file.services[event['data-request']],
             event['tag'])
@@ -251,7 +253,7 @@ def add_server(app, name, url, auth):
 
 
 # Let plugins add more commands.
-run_plugins('provide_cli', main)
+APP.run_plugins('provide_cli', main)
 
 
 def run():

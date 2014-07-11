@@ -53,6 +53,9 @@ class Plugin(object):
 class LocalPlugin(object):
     """Plugin that runs on the client."""
 
+    def __init__(self, app):
+        self.app = app
+
 
 def load_plugins(klass, *args, **kwargs):
     """Search all plugin modules for subclasses of ``klass``,
