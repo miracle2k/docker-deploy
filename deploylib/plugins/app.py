@@ -119,8 +119,6 @@ class AppPlugin(Plugin):
         # Put together a rewritten service
         definition['env'].update(env)
         definition['image'] = 'flynn/slugrunner'
-        definition['entrypoint'] = '/runner/init'
-        definition['cmd'] = ['start'] + definition['cmd']
         # For compatibility with sdutil plugin - tell it where to find the
         # binary. Note that slugrunner has support for sdutil builtin,
         # enabled by setting the SD_NAME variable. We do not use this support
