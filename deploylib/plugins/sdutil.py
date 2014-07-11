@@ -151,13 +151,13 @@ class SdutilPlugin(Plugin):
             'SDUTIL_URL', 'https://sdutil.s3.amazonaws.com/sdutil.linux')
         docker = ctx.cintf.backend.client
         ctx.job('Building version of %s with sdutil inside' % imgname)
-        newimg, _ = docker.build(fileobj=BytesIO("""
+        newimg, output = docker.build(fileobj=BytesIO("""
 FROM {old_img}
 ADD {sdutil_url} /sdutil
 RUN chmod +x /sdutil
 """.format(old_img=imgname, sdutil_url=sdutil_url)))
 
         if not newimg:
-            raise DeployError('Build failed')
+            raise DeployError('Build failed: %s' % output)
 
         return newimg, '/sdutil'
