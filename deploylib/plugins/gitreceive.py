@@ -57,7 +57,7 @@ class GitReceiveConfig(Persistent):
 
     def __init__(self):
         self.auth_keys = OOTreeSet()
-        self.hostname = 'deployhost'
+        self.hostname = ''
         self.wan_port = ''
         self.host_key = ''
 
@@ -117,8 +117,13 @@ class GitReceivePlugin(Plugin):
         """Generate a url for this service to our gitreceive daemon.
         """
         config = GitReceiveConfig.load(ctx.cintf.db)
+        hostname = config.hostname
+        if not hostname:
+            # TODO: If WAN bound, use this address automatically.
+            from pdb import set_trace; set_trace()
+            hostname = ctx.cintf.discover('system:gitreceive')
         return 'git@{}:{d}/{s}'.format(
-            config.hostname, d=service.deployment.id, s=service.name)
+            hostname, d=service.deployment.id, s=service.name)
 
 
 ################################################################################
@@ -200,9 +205,9 @@ def api_setconfig(hostname=None, wan_port=None):
     """Change gitreceive configuration
     """
     config = GitReceiveConfig.load(g.cintf.db)
-    if hostname:
+    if hostname is not None:
         config.hostname = hostname
-    if wan_port:
+    if wan_port is not None:
         config.wan_port = wan_port
     return {'job': 'Updated configuration, manual restart required'}
 
