@@ -28,8 +28,9 @@ trap cleanup EXIT
 
 # https://github.com/jakubroztocil/httpie/issues/230
 cat - > $tmpfile
-http --ignore-stdin --check-status --follow --stream -f POST http://$controller/gitreceive/push-data $AUTH name=="$repo" version=="$commit" tarball@$tmpfile 2>&1 | tee $logfile
-if (($? > 0)); then
+http --ignore-stdin --timeout 3600 --check-status --follow --stream -f POST http://$controller/gitreceive/push-data $AUTH name=="$repo" version=="$commit" tarball@$tmpfile 2>&1 | tee $logfile
+# Musn't accept on timeout
+if ((${PIPESTATUS[0]} > 0)); then
     exit 1
 fi
 # Also exit with failure if last line contains an error
