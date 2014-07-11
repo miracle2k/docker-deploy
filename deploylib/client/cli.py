@@ -144,15 +144,28 @@ class App(object):
         self.config = config = Config()
 
         # Determine the server to interact with
-        deploy_url = 'http://localhost:5555/api'
-        auth = ''
+        #
         # Should we use a predefined server?
         servername = os.environ.get('SERVER')
         if servername:
+            section = 'server "%s"' % servername
             if not config.has_section('server "%s"' % servername):
                 raise EnvironmentError("Server %s is not configured" % servername)
-            deploy_url = config['server "%s"' % servername].get('url', deploy_url)
-            auth = config['server "%s"' % servername].get('auth', auth)
+        else:
+            # Use the first server defined
+            servers = [s for s in config.sections() if s.startswith('server ')]
+            if servers:
+                section = servers[0]
+
+        if section:
+            deploy_url = config[section]['url']
+            auth = config[section].get('auth', '')
+        else:
+            # Fall back to localhost; useful default when using the CLI
+            # on the server itself.
+            deploy_url = 'http://localhost:5555/api'
+            auth = ''
+
         # Explicit overrides
         deploy_url = os.environ.get('DEPLOY_URL', deploy_url)
         auth = os.environ.get('AUTH', auth)
