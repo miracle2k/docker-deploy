@@ -1,7 +1,7 @@
 from StringIO import StringIO
 from subprocess import check_output
 import transaction
-from deploylib.client.cli import run_plugins
+from deploylib.client.cli import APP
 from deploylib.client.service import ServiceFile, Service
 from deploylib.daemon.api import create_app
 from deploylib.daemon.context import ctx
@@ -30,7 +30,7 @@ class TestGitReceive(object):
 
         assert service.held
         assert ctx.filter('url') == [
-            {'url': 'git@deployhost:foo/bar', 'gitreceive': 'bar'}]
+            {'url': 'git@system:gitreceive:foo/bar', 'gitreceive': 'bar'}]
 
     def test_key_check(self, controller):
         """Test validating an SSH public key.
@@ -100,10 +100,10 @@ class TestGitReceive(object):
         servicefile.globals = {}
         servicefile.services = {'bar': service}
 
-        run_plugins('on_server_event', servicefile, 'nomatter',
-            {'url': 'git@deployhost:foo/bar', 'gitreceive': 'bar'})
+        APP.run_plugins('on_server_event', servicefile, 'nomatter',
+            {'url': 'git@system:gitreceive:foo/bar', 'gitreceive': 'bar'})
 
         with tmpdir.join('repo').as_cwd():
             output = check_output('git remote -v', shell=True)
-            assert 'git@deployhost:foo/bar' in output
+            assert 'git@system:gitreceive:foo/bar' in output
 
