@@ -13,7 +13,7 @@ And all the service instances within that deployment will come up.
 """
 
 import os
-from subprocess import check_output
+from subprocess import check_output, CalledProcessError
 from deploylib.daemon.backend import DockerOnlyBackend
 from deploylib.plugins import Plugin
 
@@ -51,9 +51,20 @@ class UpstartBackend(DockerOnlyBackend):
         return result
 
     def terminate(self, (instance_id, name)):
-        # First, stop the service
-        check_output('initctl stop %s' % name, shell=True)
-        # Then remove the service file.
+        # First, stop the service; removing the initscript is not enough
+        # it seems to stop it from restarting.
+        try:
+            output = check_output('initctl stop %s' % name, shell=True)
+        except CalledProcessError:
+            # It is entirely possible the service is not running currently.
+            pass
+        else:
+            # If the service is not running, "initctl stop" will return
+            # a failure, so skip the call in that case.
+            if not 'stop/waiting' in output:
+                check_output('initctl stop %s' % name, shell=True)
+
+        # Finally  remove the service file.
         rm_upstart_conf(name)
 
     def write_upstart_for_service(self, deployment, runcfg):
