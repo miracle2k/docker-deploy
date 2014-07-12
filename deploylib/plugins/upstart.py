@@ -13,6 +13,7 @@ And all the service instances within that deployment will come up.
 """
 
 import os
+from subprocess import check_output
 from deploylib.daemon.backend import DockerOnlyBackend
 from deploylib.plugins import Plugin
 
@@ -36,12 +37,24 @@ class UpstartBackend(DockerOnlyBackend):
     """
 
     def start(self, runcfg, service, instance_id):
+        # First start the container manually via docker; this acts as
+        # validation; if it fails, don't bother writing the initscript.
+        result = DockerOnlyBackend.start(self, runcfg, service, instance_id)
+
+        # Create an upstart initscript for the service.
         self.write_upstart_for_service(service.deployment, runcfg)
-        return DockerOnlyBackend.start(self, runcfg, service, instance_id)
+
+        # Ask upstart to start the service; it will attach to the
+        # manually started container.
+        check_output('initctl start %s' % runcfg['name'], shell=True)
+
+        return result
 
     def terminate(self, (instance_id, name)):
+        # First, stop the service
+        check_output('initctl stop %s' % name, shell=True)
+        # Then remove the service file.
         rm_upstart_conf(name)
-        return DockerOnlyBackend.terminate(self, (instance_id, name))
 
     def write_upstart_for_service(self, deployment, runcfg):
         # Upstart file for an individual service. Linked to start

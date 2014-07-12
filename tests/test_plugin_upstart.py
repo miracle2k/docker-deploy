@@ -1,4 +1,6 @@
+from io import BytesIO
 import os
+import mock
 import pytest
 from deploylib.plugins.upstart import UpstartPlugin
 
@@ -12,6 +14,22 @@ def upstart(tmpdir):
     upstart_dir = tmpdir.join('upstart').ensure(dir=True)
     os.environ['UPSTART_DIR'] = str(upstart_dir)
     return upstart_dir
+
+
+@pytest.fixture(autouse=True)
+def patch_initctl(request):
+    # Mock subprocess calls used by container build
+    fake_popen = mock.NonCallableMagicMock()
+    fake_popen.stdout = BytesIO("foo")
+    fake_popen.returncode = 0
+    fake_popen.poll.side_effect = lambda: 0
+    subprocess_patcher = mock.patch(
+        "gevent.subprocess.Popen", side_effect=lambda *a, **kw: fake_popen)
+    subprocess_patcher.start()
+
+    def end():
+        subprocess_patcher.stop()
+    request.addfinalizer(end)
 
 
 @pytest.mark.usefixtures('mock_backend_docker')
