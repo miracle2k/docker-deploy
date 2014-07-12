@@ -126,6 +126,7 @@ class Config(ConfigParser.ConfigParser):
 
 
 class App(object):
+
     def __init__(self):
         self.PLUGINS = load_plugins(LocalPlugin, self)
 
@@ -170,6 +171,14 @@ class App(object):
                 return result
         else:
             return False
+
+    def get_plugin(self, klass, require=True):
+        for plugin in self.PLUGINS:
+            if isinstance(plugin, klass):
+                return plugin
+        if not require:
+            return None
+        raise IndexError(klass)
 
     def plugin_call(self, method, plugin, func, kwargs):
         print_jobs(self.api.plugin(method, plugin, func, **kwargs))

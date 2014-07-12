@@ -34,18 +34,17 @@ sensible as well.
 """
 
 import subprocess
-import ConfigParser
 from BTrees._OOBTree import OOTreeSet
 import click
 from clint.textui import puts
 from flask import Blueprint, g, request
 from Crypto.PublicKey import RSA
-from os import path
 from persistent import Persistent
 import yaml
 from deploylib.daemon.api import json_method, streaming, TextStreamingResponse
 from deploylib.daemon.context import ctx
 from deploylib.plugins import Plugin, LocalPlugin
+from deploylib.plugins.app import LocalAppPlugin
 
 
 class GitReceiveConfig(Persistent):
@@ -266,7 +265,8 @@ class LocalGitReceivePlugin(LocalPlugin):
         run = subprocess.check_output
         from deploylib.client.utils import directory
 
-        project_path = self.find_path(service, service['git'])
+        project_path = self.app.get_plugin(LocalAppPlugin).find_project_repo(
+            service, service['git'])
         with directory(project_path):
             remotes = run('git remote', shell=True).splitlines()
             if not 'deploy' in remotes:
@@ -274,26 +274,3 @@ class LocalGitReceivePlugin(LocalPlugin):
                 puts('-----> Added remote "deploy" to %s' % project_path)
             else:
                 puts('-----> Push %s to remote "deploy" to provide code.' % project_path)
-
-    def find_path(self, service, rel):
-        """Try to find ``rel``. Either it's relative to the service file,
-        or it must be in the user's search path.
-        """
-        relative_to_file = service.path(rel)
-        if path.exists(relative_to_file):
-            return relative_to_file
-
-        # If not valid as a relative path, look in the search path
-        # for the app.
-        try:
-            searchpath = self.app.config.get('app', 'search-path').split(':')
-        except ConfigParser.NoSectionError, ConfigParser.NoOptionError:
-            searchpath = []
-        for dir in searchpath:
-            candidate = path.join(dir, rel)
-            if path.exists(candidate):
-                return candidate
-
-        # Not found in the search path either.
-        raise EnvironmentError('Cannot find app, not a relative path '
-                               'and not found in search path: %s' % rel)

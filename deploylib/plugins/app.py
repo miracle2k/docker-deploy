@@ -5,15 +5,16 @@ store compiled slugs.
 """
 
 import os
-from os.path import abspath
+from os.path import abspath, exists, join as path
 import subprocess
+import ConfigParser
 import tempfile
 
-from . import Plugin, LocalPlugin
 import click
 from deploylib.daemon.context import ctx
 from deploylib.daemon.controller import DeployError
 from deploylib.plugins.shelf import ShelfPlugin
+from . import Plugin, LocalPlugin
 
 
 class LocalAppPlugin(LocalPlugin):
@@ -38,7 +39,7 @@ class LocalAppPlugin(LocalPlugin):
         # The given path may be a subdirectory of a repo
         # For git archive to work right we need the sub path relative
         # to the repository root.
-        project_path = service.path(service['git'])
+        project_path = self.find_project_repo(service, service['git'])
         with directory(project_path):
             git_root = run('git rev-parse --show-toplevel', shell=True)
             gitsubdir = project_path[len(git_root):]
@@ -55,6 +56,29 @@ class LocalAppPlugin(LocalPlugin):
             return {
                 'app': (temp, {'version': app_version})
             }
+
+    def find_project_repo(self, service, rel):
+        """Try to find ``rel``. Either it's relative to the service file,
+        or it must be in the user's search path.
+        """
+        relative_to_file = service.path(rel)
+        if exists(relative_to_file):
+            return relative_to_file
+
+        # If not valid as a relative path, look in the search path
+        # for the app.
+        try:
+            searchpath = self.app.config.get('app', 'search-path').split(':')
+        except ConfigParser.NoSectionError, ConfigParser.NoOptionError:
+            searchpath = []
+        for dir in searchpath:
+            candidate = path(dir, rel)
+            if exists(candidate):
+                return candidate
+
+        # Not found in the search path either.
+        raise EnvironmentError('Cannot find app, not a relative path '
+                               'and not found in search path: %s' % rel)
 
 
 class AppPlugin(Plugin):
