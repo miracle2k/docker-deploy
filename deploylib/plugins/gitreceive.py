@@ -120,7 +120,6 @@ class GitReceivePlugin(Plugin):
         hostname = config.hostname
         if not hostname:
             # TODO: If WAN bound, use this address automatically.
-            from pdb import set_trace; set_trace()
             hostname = ctx.cintf.discover('system:gitreceive')
         return 'git@{}:{d}/{s}'.format(
             hostname, d=service.deployment.id, s=service.name)
