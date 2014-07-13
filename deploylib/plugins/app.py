@@ -80,6 +80,23 @@ class LocalAppPlugin(LocalPlugin):
         raise EnvironmentError('Cannot find app, not a relative path '
                                'and not found in search path: %s' % rel)
 
+    def add_dir_to_search_path(self, newdir):
+        app = self.app
+
+        # What a pain to make sure the config is initialized properly
+        if not app.config.has_section('app'):
+            app.config.add_section('app')
+        if not app.config.has_option('app', 'search-path'):
+            app.config.set('app', 'search-path', '')
+
+        path = app.config.get('app', 'search-path').split(':')
+        if not newdir in path:
+           path.append(newdir)
+        app.config.set('app', 'search-path', ':'.join(path))
+        app.config.save()
+
+        return path
+
 
 class AppPlugin(Plugin):
     """Will run a 12-factor style app.
@@ -240,19 +257,5 @@ def app_addsearchpath(app, dir):
     """Register a local directory that is searched for applications.
     """
     dir = abspath(dir)
-
-    # What a pain to make sure the config is initialized properly
-    if not app.config.has_section('app'):
-        app.config.add_section('app')
-    if not app.config.has_option('app', 'search-path'):
-        app.config.set('app', 'search-path', '')
-
-    path = app.config.get('app', 'search-path').split(':')
-    if not dir in path:
-       path.append(dir)
-    app.config.set('app', 'search-path', ':'.join(path))
-    app.config.save()
-
-    for p in path:
+    for p in app.get_plugin(LocalAppPlugin).add_dir_to_search_path(dir):
         print p
-

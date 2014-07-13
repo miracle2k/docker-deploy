@@ -3,8 +3,9 @@ import subprocess
 import mock
 import pytest
 from werkzeug.datastructures import FileStorage
+from deploylib.client.service import Service
 from deploylib.daemon.controller import canonical_definition
-from deploylib.plugins.app import AppPlugin
+from deploylib.plugins.app import AppPlugin, LocalAppPlugin
 from deploylib.plugins.shelf import ShelfPlugin
 
 
@@ -129,3 +130,22 @@ class TestAppPlugin(object):
         assert service.versions[1].globals ==service.versions[0].globals
         assert service.versions[1].data['app_version_id'] == service.versions[0].data['app_version_id']
 
+
+class TestLocalAppPlugin(object):
+
+    def test_search_path(self, tmpdir, app):
+        service = Service()
+        service.filename = tmpdir.join('Servicefile').strpath
+
+        find_repo = app.get_plugin(LocalAppPlugin).find_project_repo
+
+        # With the folder not existing, this raises an error.
+        pytest.raises(EnvironmentError, find_repo, service, 'foo')
+
+        # If the folder exists in a relative location, we'll find that.
+        tmpdir.mkdir('foo') == find_repo(service, 'foo')
+
+        # Find a project if on the search path.
+        app.get_plugin(LocalAppPlugin).add_dir_to_search_path(
+            tmpdir.join('foo').strpath)
+        tmpdir.join('foo').mkdir('bar') == find_repo(service, 'bar')

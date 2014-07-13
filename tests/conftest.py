@@ -3,6 +3,7 @@ import os
 import pytest
 import responses as responses_lib
 import transaction
+from deploylib.client.cli import App
 from deploylib.daemon.context import set_context, Context
 from deploylib.daemon.controller import Controller
 
@@ -108,3 +109,10 @@ def responses(request):
     mock.start()
     request.addfinalizer(mock.stop)
     return mock
+
+
+@pytest.fixture()
+def app(request):
+    """CLI App object.
+    """
+    return App()
