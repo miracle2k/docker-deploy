@@ -112,7 +112,7 @@ def responses(request):
 
 
 @pytest.fixture()
-def app(request):
+def app(request, tmpdir):
     """CLI App object.
     """
-    return App()
+    return App(config=tmpdir.join('.config').strpath)

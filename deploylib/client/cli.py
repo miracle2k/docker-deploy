@@ -117,9 +117,9 @@ class Config(ConfigParser):
     - Improves on the pretty terribly API of ConfigParser.
     """
 
-    def __init__(self):
+    def __init__(self, filename=None):
         ConfigParser.__init__(self)
-        self.filename = os.path.expanduser('~/.calzion')
+        self.filename = filename or os.path.expanduser('~/.calzion')
         self.read(self.filename)
 
     def save(self):
@@ -146,10 +146,10 @@ class Config(ConfigParser):
 
 class App(object):
 
-    def __init__(self):
+    def __init__(self, config=None):
         self.PLUGINS = load_plugins(LocalPlugin, self)
 
-        self.config = config = Config()
+        self.config = config = Config(filename=config)
 
         # Determine the server to interact with
         #
