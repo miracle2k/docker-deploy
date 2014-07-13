@@ -1,7 +1,6 @@
 from collections import OrderedDict
 from os.path import join as path, dirname, normpath
 import yaml
-from .utils import OrderedDictYAMLLoader
 
 
 class Service(dict):
@@ -25,21 +24,9 @@ class ServiceFile(object):
     """
 
     @classmethod
-    def load(cls, filename, ordered=False, plugin_runner=None):
+    def load(cls, filename, plugin_runner=None):
         with open(filename, 'r') as f:
-            # Services should generally not depend on a specific order,
-            # instead rely on service discovery.
-            # There is one exception though: When deploying an initial
-            # template, a database might need to be initialized first
-            # to setup a user account, before that user account can be
-            # added to another containers environment.
-            # Further, for the Bootstrap file, we also need to make
-            # sure etcd starts before discoverd before shelf.
-            if ordered:
-                opts = {'Loader': OrderedDictYAMLLoader}
-            else:
-                opts = {}
-            structure = yaml.load(f, **opts)
+            structure = yaml.load(f)
 
         # All keys in the template fall in one of two categories:
         # A container to run, or an arbitrary section of global data.
