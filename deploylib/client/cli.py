@@ -161,6 +161,7 @@ class App(object):
                 raise EnvironmentError("Server %s is not configured" % servername)
         else:
             # Use the first server defined
+            section = None
             servers = [s for s in config.sections() if s.startswith('server ')]
             if servers:
                 section = servers[0]

@@ -68,7 +68,7 @@ class LocalAppPlugin(LocalPlugin):
         # If not valid as a relative path, look in the search path
         # for the app.
         try:
-            searchpath = self.app.config.get('app', 'search-path').split(':')
+            searchpath = self.app.config.get('app', 'search-path', '').split(':')
         except ConfigParser.NoSectionError, ConfigParser.NoOptionError:
             searchpath = []
         for dir in searchpath:
