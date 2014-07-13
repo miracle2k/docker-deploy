@@ -5,7 +5,7 @@ import sys
 import os
 from urlparse import urljoin
 import json
-import ConfigParser
+from ConfigParser import ConfigParser
 
 import click
 import requests
@@ -110,10 +110,15 @@ def single_result(event):
         raise click.ClickException('Aborted.')
 
 
-class Config(ConfigParser.ConfigParser):
+class Config(ConfigParser):
+    """Config object that can:
+
+    - Save itself
+    - Improves on the pretty terribly API of ConfigParser.
+    """
 
     def __init__(self):
-        ConfigParser.ConfigParser.__init__(self)
+        ConfigParser.__init__(self)
         self.filename = os.path.expanduser('~/.calzion')
         self.read(self.filename)
 
@@ -123,6 +128,20 @@ class Config(ConfigParser.ConfigParser):
 
     def __getitem__(self, item):
         return dict(self.items(item))
+
+    def get(self, section, option, default=None):
+        """Rather than raising an exception, like, FOR ANYTYING,
+        this just returns None if the value does not exist.
+        """
+        if not self.has_option(section, option):
+            return default
+        return ConfigParser.get(self, section, option)
+
+    def set(self, section, option, value=None):
+        """Does not require manual creation of a section."""
+        if not self.has_section(section):
+            self.add_section(section)
+        return ConfigParser.set(self, section, option, value)
 
 
 class App(object):

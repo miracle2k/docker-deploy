@@ -83,13 +83,7 @@ class LocalAppPlugin(LocalPlugin):
     def add_dir_to_search_path(self, newdir):
         app = self.app
 
-        # What a pain to make sure the config is initialized properly
-        if not app.config.has_section('app'):
-            app.config.add_section('app')
-        if not app.config.has_option('app', 'search-path'):
-            app.config.set('app', 'search-path', '')
-
-        path = app.config.get('app', 'search-path').split(':')
+        path = app.config.get('app', 'search-path', default='').split(':')
         if not newdir in path:
            path.append(newdir)
         app.config.set('app', 'search-path', ':'.join(path))
