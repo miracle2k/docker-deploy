@@ -146,7 +146,7 @@ class StrowgerPlugin(Plugin):
         if not 'strowger' in ctx.cintf.db.deployments['system'].services:
             return
 
-        api_ip = ctx.cintf.discover('strowger-api')
+        api_ip = ctx.cintf.discover('router-api')
         strowger = StrowgerClient(api_ip)
 
         for domain, data in domains.items():
