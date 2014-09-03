@@ -90,7 +90,7 @@ class GitReceivePlugin(Plugin):
             return False
 
         # If the gitreceive service has not yet been setup, do so now
-        if not 'gitreceive' in ctx.cintf.db.deployments['system'].services or True:
+        if not 'gitreceive' in ctx.cintf.db.deployments['system'].services:
             self.setup_gitreceive()
 
         ctx.custom(**{'gitreceive': service.name, 'url': self.get_url(service)})
