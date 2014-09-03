@@ -14,7 +14,7 @@ from deploylib.plugins import Plugin, LocalPlugin
 
 
 SHELF = """
-image: elsdoerfer/shelf
+image: flynn/blobstore
 cmd: -s /var/lib/shelf
 volumes: {data: /var/lib/shelf}
 """
