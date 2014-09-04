@@ -93,12 +93,17 @@ def canonical_definition(name, definition):
     canonical['env'] = definition.pop('env', {})
     canonical['volumes'] = definition.pop('volumes', {})
     canonical['privileged'] = definition.pop('privileged', False)
-    canonical['host_ports'] = {
+    canonical['wan_map'] = {
         k: normalize_port_mapping(v)
-        for k, v in definition.pop('host_ports', {}).items()}
+        for k, v in definition.pop('wan_map', {}).items()}
 
+    port = definition.pop('port', None)
     ports = definition.pop('ports', None)
-    if not ports:
+    assert not (port and ports), 'Specify either ports or port'
+    if port:
+        # Shortcut to specify the default port
+        ports = {'': port}
+    elif not ports:
         # If no ports are given, always provide a default port
         ports = {'': 'assign'}
     if isinstance(ports, (list, tuple)):
@@ -279,43 +284,32 @@ class ControllerInterface(object):
         # Construct the 'ports' argument. Given some named ports, we want
         # to determine which of them need to be mapped to the host and how.
         defined_ports = definition['ports']
-        defined_mappings = definition['host_ports']
         port_assignments = {}
         for port_name, container_port in defined_ports.items():
-            # Ports may be defined but won't be mapped, assume this by default.
-            host_port = None
+            # All ports are mapped to the host LAN in this default networking
+            # mode that has not yet been moved to plugins.
+            host_port = (host_lan_ip, get_free_port())
 
-            # Maybe this named port should be mapped to a specific host port
-            host_port = defined_mappings.get(port_name, None)
-
-            # See if we should provide a port to the container.
+            # If we need to select a port to give the container, just use
+            # the same one as on the host, because why not.
             if container_port == 'assign':
-                # If no host port was assigned, get a random one.
-                if not host_port:
-                    host_port = ('', get_free_port())
-
-                # Always use the same port within the container as on the
-                # host. Makes it easier for the container to register the
-                # right port for service discovery.
                 container_port = host_port[1]
 
             port_assignments[port_name] = {
                 'host': host_port, 'container': container_port}
+            runcfg['ports'][container_port] = host_port
 
-            if host_port:
-                if not host_port[0]:
-                    # docker by default would bind to 0.0.0.0, exposing
-                    # the service to the world; we bind to the lan only
-                    # by default. user can give 0.0.0.0 if he wants to.
-                    host_port = (host_lan_ip, host_port[1])
+            # These ports can be used in the service definition, for
+            # example as part of the command line or env definition.
+            var_name = 'PORT' if port_name == "" else 'PORT_%s' % port_name.upper()
+            local_repl[var_name] = container_port
+            extra_env[var_name] = container_port
+            var_name = 'SD' if port_name == "" else 'SD_%s' % port_name.upper()
+            extra_env[var_name] = host_port
 
-                runcfg['ports'][container_port] = host_port
-
-                # These ports can be used in the service definition, for
-                # example as part of the command line or env definition.
-                var_name = 'PORT'if port_name == "" else 'PORT_%s' % port_name.upper()
-                local_repl[var_name] = container_port
-                extra_env[var_name] = container_port
+        # This allows extra mappings to be used for
+        for binding, port_name in definition['wan_map'].items():
+            runcfg['ports'][port_assignments[port_name]['container']] = binding
 
         # The environment variables
         runcfg['env'] = ((version.globals.get('Env') or {}).get(service.name, {}) or {}).copy()
