@@ -83,7 +83,7 @@ def canonical_definition(name, definition):
         name = name
         canonical['image'] = definition.pop('image')
 
-    canonical['cmd'] = definition.pop('cmd', '')
+    canonical['cmd'] = definition.pop('cmd', [])
     if isinstance(canonical['cmd'], basestring):
         # docker-py accepts string as well and does the same split.
         # To allow our internal code to rely on one format, we normalize
