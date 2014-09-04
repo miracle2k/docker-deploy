@@ -67,9 +67,9 @@ STROWGER = \
 """
 image: elsdoerfer/strowger
 cmd:
-    '--httpaddr=":{PORT_HTTP}"'
-    '--httpsaddr=":{PORT_HTTPS}"'
-    '--apiaddr=":{PORT_RPC}"'
+    - '--httpaddr=:{PORT_HTTP}'
+    - '--httpsaddr=:{PORT_HTTPS}'
+    - '--apiaddr=:{PORT_RPC}'
 ports: [http, https, rpc]
 wan_map: {"0.0.0.0:80": http, "0.0.0.0:443": https}
 env:
