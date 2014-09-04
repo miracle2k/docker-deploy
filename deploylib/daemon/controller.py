@@ -87,9 +87,8 @@ def canonical_definition(name, definition):
     if isinstance(canonical['cmd'], basestring):
         # docker-py accepts string as well and does the same split.
         # To allow our internal code to rely on one format, we normalize
-        # to a list earlier.
-        # TODO: We might have to do a "/bin/sh" prefix here ourselves.
-        canonical['cmd'] = shlex.split(canonical['cmd'])
+        # to a list earlier, so copy the docker behaviour itself here.
+        canonical['cmd'] = ['/bin/sh', '-c', canonical['cmd']]
     canonical['entrypoint'] = definition.pop('entrypoint', '')
     if isinstance(canonical['entrypoint'], basestring):
         canonical['entrypoint'] = shlex.split(canonical['entrypoint'])
