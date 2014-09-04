@@ -42,6 +42,9 @@ def normalize_port_mapping(s):
     The return value will be given to docker-py, which has it's own range
     of supported format variations; for a missing port, we would return
     ``(ip, '')``.
+
+
+    TODO: We may no longer need this.
     """
     if isinstance(s, (tuple, list)):
         return tuple(s)
@@ -94,7 +97,7 @@ def canonical_definition(name, definition):
     canonical['volumes'] = definition.pop('volumes', {})
     canonical['privileged'] = definition.pop('privileged', False)
     canonical['wan_map'] = {
-        k: normalize_port_mapping(v)
+        normalize_port_mapping(k) : v
         for k, v in definition.pop('wan_map', {}).items()}
 
     port = definition.pop('port', None)
