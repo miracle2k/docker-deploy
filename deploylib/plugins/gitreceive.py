@@ -108,7 +108,7 @@ class GitReceivePlugin(Plugin):
             config.host_key = generate_ssh_private_key()
         gitreceive_def['env']['SSH_PRIVATE_KEYS'] = config.host_key
         if getattr(config, 'wan_port'):
-            gitreceive_def['host_ports'] = {'': config.wan_port}
+            gitreceive_def['wan_map'] = {config.wan_port: ''}
         ctx.cintf.set_service(
             'system', 'gitreceive', gitreceive_def, force=True)
 

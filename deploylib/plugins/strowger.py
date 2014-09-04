@@ -68,7 +68,7 @@ STROWGER = \
 image: elsdoerfer/strowger
 cmd: -httpaddr=":{PORT_HTTP}" --httpsaddr=":{PORT_HTTPS}" --apiaddr=":{PORT_RPC}"
 ports: [http, https, rpc]
-host_ports: {http: "0.0.0.0:80", https: "0.0.0.0:443"}
+wan_map: {"0.0.0.0:80": http, "0.0.0.0:443": https}
 env:
     ETCD_PREFIX: /strowger
 """
