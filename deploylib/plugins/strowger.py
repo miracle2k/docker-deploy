@@ -30,7 +30,7 @@ def basic_passwd(username, realm, password):
     # for it (or change the design of the router so we don't need it)
     import passlib
     from passlib.hash import apr_md5_crypt
-    return apr_md5_crypt.encrypt(
+    return None, None, apr_md5_crypt.encrypt(
         password, salt=passlib.utils.generate_password(8))
 
 
