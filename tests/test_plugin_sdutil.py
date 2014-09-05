@@ -24,7 +24,7 @@ class TestSdutilPlugin(object):
         # Create a service with a default port, register it.
         service = cintf.set_service('foo', 'bar', {
             'image': 'bar',
-            'entrypoint': '/entry',
+            'entrypoint': ['/entry'],
             'sdutil': {
                 'register': True,
                 'binary': '/my-sdutil'
@@ -45,8 +45,8 @@ class TestSdutilPlugin(object):
         # Create a service with a default port, define a dependency
         service = cintf.set_service('foo', 'bar', {
             'image': 'bar',
-            'entrypoint': '/entry',
-            'cmd': 'a-command',
+            'entrypoint': ['/entry'],
+            'cmd': ['a-command'],
             'sdutil': {
                 'binary': '/my-sdutil',
                 'expose': {
@@ -68,8 +68,8 @@ class TestSdutilPlugin(object):
         # Create a service with a default port, define a dependency
         service = cintf.set_service('foo', 'bar', {
             'image': 'bar',
-            'entrypoint': '/entry',
-            'cmd': 'a-command',
+            'entrypoint': ['/entry'],
+            'cmd': ['a-command'],
             'sdutil': {
                 'register': True
 

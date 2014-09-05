@@ -299,7 +299,8 @@ class ControllerInterface(object):
 
             port_assignments[port_name] = {
                 'host': host_port, 'container': container_port}
-            runcfg['ports'][container_port] = host_port
+            runcfg['ports'].setdefault(container_port, [])
+            runcfg['ports'][container_port].append(host_port)
 
             # These ports can be used in the service definition, for
             # example as part of the command line or env definition.
@@ -311,7 +312,9 @@ class ControllerInterface(object):
 
         # This allows extra mappings to be used for
         for binding, port_name in definition['wan_map'].items():
-            runcfg['ports'][port_assignments[port_name]['container']] = binding
+            cp = port_assignments[port_name]['container']
+            runcfg['ports'].setdefault(cp, [])
+            runcfg['ports'][cp].append(binding)
 
         # The environment variables
         runcfg['env'] = ((version.globals.get('Env') or {}).get(service.name, {}) or {}).copy()

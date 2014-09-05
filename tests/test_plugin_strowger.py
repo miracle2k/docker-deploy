@@ -9,7 +9,7 @@ controller_plugins = [StrowgerPlugin]
 @pytest.fixture(autouse=True)
 def strowger_api(responses):
     responses.add(
-        responses.PUT, 'http://strowger-api/routes', body=json.dumps({}))
+        responses.PUT, 'http://router-api/routes', body=json.dumps({}))
 
 
 class TestStrowger(object):
