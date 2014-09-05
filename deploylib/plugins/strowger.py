@@ -170,7 +170,7 @@ class StrowgerPlugin(Plugin):
             service_name = data.get('http')
             if not service_name:
                 continue
-            ctx.log('%s -> %s' % domain, service_name)
+            ctx.log('%s -> %s' % (domain, service_name))
             strowger.set_http_route(
                 domain, service_name, key=data.get('key'),
                 cert=data.get('cert'), auth=data.get('auth'),
