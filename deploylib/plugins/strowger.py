@@ -24,6 +24,15 @@ def digest_passwd(username, realm, password):
     return (username, realm, kd([username, realm, password]))
 
 
+def basic_passwd(username, realm, password):
+    # This is actually hard, use something like
+    # https://pythonhosted.org/passlib/lib/passlib.hash.apr_md5_crypt.html
+    # for it (or change the design of the router so we don't need it)
+    from passlib.hash import apr_md5_crypt
+    return apr_md5_crypt.encrypt(
+        password, salt=os.urandom(16).encode('base_64'))
+
+
 class StrowgerClient:
 
     def __init__(self, url):
@@ -44,11 +53,12 @@ class StrowgerClient:
         return response.json()
 
     def set_http_route(self, domain, service, cert=None, key=None, auth=None,
-                       auth_realm='protected'):
+                       auth_realm='protected', auth_mode='digest'):
         # Encode the passwords for the user, since strowger currently
         # expects them to be submitted has hashes.
         if auth:
-            auth = {k: digest_passwd(k, auth_realm, v)[2] for k, v in auth.items()}
+            func = basic_passwd if auth_mode == 'basic' else digest_passwd
+            auth = {k: func(k, auth_realm, v)[2] for k, v in auth.items()}
 
         route = {
             'domain': domain,
@@ -160,7 +170,8 @@ class StrowgerPlugin(Plugin):
                 continue
             strowger.set_http_route(
                 domain, service_name, key=data.get('key'),
-                cert=data.get('cert'), auth=data.get('auth'))
+                cert=data.get('cert'), auth=data.get('auth'),
+                auth_mode=data.get('auth_mode'))
 
         # TODO: Support further plugins to configure the domain DNS
         # TODO: The strowger interaction relates to how we could do
