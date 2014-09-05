@@ -28,9 +28,10 @@ def basic_passwd(username, realm, password):
     # This is actually hard, use something like
     # https://pythonhosted.org/passlib/lib/passlib.hash.apr_md5_crypt.html
     # for it (or change the design of the router so we don't need it)
+    import passlib
     from passlib.hash import apr_md5_crypt
     return apr_md5_crypt.encrypt(
-        password, salt=os.urandom(16).encode('base_64'))
+        password, salt=passlib.utils.generate_password(8))
 
 
 class StrowgerClient:
@@ -63,7 +64,7 @@ class StrowgerClient:
         route = {
             'domain': domain,
             'service': service,
-            'auth_type': 'digest' if auth else None,
+            'auth_type': (auth_mode or 'digest') if auth else None,
             'http_auth': auth,
             'http_realm': auth_realm,
             'tls_cert': cert,

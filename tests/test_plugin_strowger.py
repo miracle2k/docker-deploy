@@ -72,11 +72,23 @@ class TestStrowger(object):
             }})
 
         result = json.loads(responses.calls[0][0].body)
-        print(result)
         assert result['config']['domain'] == 'foo.org'
         assert result['config']['auth_type'] == 'digest'
         assert result['config']['http_auth'] == \
             {u'user': u'0554c44c150f03f1d9f21be67902a067'}
+
+        cintf.set_globals('foo', {
+            'Domains': {
+                'bar.org': {
+                    'http': 'another-service',
+                    'auth': {'user': 'pw'},
+                    'auth_mode': 'basic',
+                }
+            }})
+
+        result = json.loads(responses.calls[1][0].body)
+        assert result['config']['auth_type'] == 'basic'
+        assert 'user' in result['config']['http_auth']
 
     def test_ignore_empty_domains(self, cintf, responses):
         """[Regression]  Do not fail on empty domains."""
