@@ -163,12 +163,14 @@ class StrowgerPlugin(Plugin):
         api_ip = ctx.cintf.discover('router-api')
         strowger = StrowgerClient(api_ip)
 
+        ctx.job('Setting up routes')
         for domain, data in domains.items():
             if not data:
                 continue
             service_name = data.get('http')
             if not service_name:
                 continue
+            ctx.log('%s -> %s' % domain, service_name)
             strowger.set_http_route(
                 domain, service_name, key=data.get('key'),
                 cert=data.get('cert'), auth=data.get('auth'),
