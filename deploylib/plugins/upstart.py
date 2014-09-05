@@ -13,6 +13,7 @@ And all the service instances within that deployment will come up.
 """
 
 import os
+import time
 from subprocess import check_output, CalledProcessError
 from deploylib.daemon.backend import DockerOnlyBackend
 from deploylib.plugins import Plugin
@@ -68,6 +69,13 @@ class UpstartBackend(DockerOnlyBackend):
 
         # Finally  remove the service file.
         rm_upstart_conf(name)
+
+        # Sometimes, especially with new docker versions, we see
+        # "port already bound" messages if we do a quick stop/start
+        # succession. This is supposed to help, though maybe we want
+        # to connect to the docker API (or check initctl) to ensure
+        # the service has really ended.
+        time.sleep(1)
 
     def write_upstart_for_service(self, deployment, runcfg):
         # Upstart file for an individual service. Linked to start
