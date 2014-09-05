@@ -46,7 +46,9 @@ class UpstartBackend(DockerOnlyBackend):
 
         # Ask upstart to start the service; it will attach to the
         # manually started container.
-        check_output('initctl start %s' % runcfg['name'], shell=True)
+        output = check_output('initctl status %s' % runcfg['name'], shell=True)
+        if not 'start/running' in output:
+            check_output('initctl start %s' % runcfg['name'], shell=True)
 
         return result
 
@@ -54,10 +56,10 @@ class UpstartBackend(DockerOnlyBackend):
         # First, stop the service; removing the initscript is not enough
         # it seems to stop it from restarting.
         try:
-            output = check_output('initctl stop %s' % name, shell=True)
+            output = check_output('initctl status %s' % name, shell=True)
         except CalledProcessError:
-            # It is entirely possible the service is not running currently.
-            pass
+            # Can this happen? When the service file does not exist?
+            raise
         else:
             # If the service is not running, "initctl stop" will return
             # a failure, so skip the call in that case.
