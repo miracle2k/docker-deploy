@@ -313,6 +313,8 @@ class ControllerInterface(object):
             extra_env['%s_HOST'%var_name] = host_port[0]
             extra_env['%s_NAME'%var_name] = '{did}:{sname}'.format(
                 did=deployment.id, sname=service.name)
+            if port_name != "":
+                extra_env['%s_NAME'%var_name] += ':%s' % port_name
 
         # This allows extra mappings to be used for
         for binding, port_name in definition['wan_map'].items():
