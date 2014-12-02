@@ -30,6 +30,7 @@ start on (filesystem and started docker)
 stop on runlevel [!2345] or stopping docker
 respawn
 script
+  docker rm etcd
   # It would appear "started docker" does not mean docker is
   # actually ready, so wait first until it is.
   FILE=/var/run/docker.sock
@@ -47,6 +48,7 @@ start on started etcd
 stop on stopping etcd
 respawn
 script
+    docker rm discoverd
     docker run --rm --name discoverd -p $ip:1111:1111 -e EXTERNAL_IP=$ip flynn/discoverd -etcd http://$ip:4001
 end script
 EOF
