@@ -13,10 +13,15 @@ from deploylib.daemon.context import ctx
 from deploylib.plugins import Plugin, LocalPlugin
 
 
+SHELF_SD_NAME = 'system:shelf'
+
 SHELF = """
 image: flynn/blobstore
-cmd: -s /var/lib/shelf
+entrypoint: /bin/flynn-blobstore
+cmd: ["-s", "/var/lib/shelf"]
 volumes: {data: /var/lib/shelf}
+sdutil:
+    register: true
 """
 
 

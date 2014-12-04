@@ -14,7 +14,7 @@ import click
 from deploylib.client.cli import print_jobs
 from deploylib.daemon.context import ctx
 from deploylib.daemon.controller import DeployError
-from deploylib.plugins.shelf import ShelfPlugin
+from deploylib.plugins.shelf import ShelfPlugin, SHELF_SD_NAME
 from . import Plugin, LocalPlugin
 
 
@@ -218,7 +218,7 @@ class AppPlugin(Plugin):
 
     def _get_slug_url(self, service, slug_name):
         # Put together an full url for a slug
-        shelf_ip = ctx.cintf.discover('shelf')
+        shelf_ip = ctx.cintf.discover(SHELF_SD_NAME)
         release_id = "{}/{}:{}".format(
             service.deployment.id, service.name, slug_name)
         slug_url = 'http://{}{}'.format(shelf_ip, '/slugs/{}'.format(release_id))
