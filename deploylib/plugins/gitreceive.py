@@ -237,8 +237,11 @@ def gitreceive_addkey(app, keyfile):
 
 
 @gitreceive_cli.command('config-set')
-@click.option('--hostname')
-@click.option('--wan-port')
+@click.option('--hostname', help="this host is used when adding the git url"
+                                 "to a repository; your gitreceive service"
+                                 "should be accessible here")
+@click.option('--wan-port', help="if the gitreceive service should be mapped"
+                                 "to a wan port")
 @click.pass_obj
 def gitreceive_config(app, hostname, wan_port):
     """Set gitreceive configuration.
