@@ -308,7 +308,7 @@ class ControllerInterface(object):
             local_repl[var_name] = container_port
             extra_env[var_name] = container_port
             var_name = 'SD' if port_name == "" else 'SD_%s' % port_name.upper()
-            extra_env[var_name] = ':'.join(host_port)
+            extra_env[var_name] = ':'.join(map(str, host_port))
             extra_env['%s_PORT'%var_name] = host_port[1]
             extra_env['%s_HOST'%var_name] = host_port[0]
             extra_env['%s_NAME'%var_name] = '{did}:{sname}'.format(
