@@ -120,8 +120,16 @@ class GitReceivePlugin(Plugin):
         if not hostname:
             # TODO: If WAN bound, use this address automatically.
             hostname = ctx.cintf.discover('system:gitreceive')
-        return 'git@{}:{d}/{s}'.format(
-            hostname, d=service.deployment.id, s=service.name)
+
+        if ':' in hostname:
+            # If the hostname has a port, the remote will only work in
+            # git if we use the ssh:// schema.
+            fmt = 'ssh://git@{hostname}/{deploy_id}/{service}'
+        else:
+            fmt = 'git@{hostname}:{deploy_id}/{service}'
+        return fmt.format(
+            hostname=hostname,
+            deploy_id=service.deployment.id, service=service.name)
 
 
 ################################################################################
