@@ -11,6 +11,7 @@ import ConfigParser
 import tempfile
 
 import click
+from deploylib.client.cli import print_jobs
 from deploylib.daemon.context import ctx
 from deploylib.daemon.controller import DeployError
 from deploylib.plugins.shelf import ShelfPlugin
@@ -253,3 +254,21 @@ def app_addsearchpath(app, dir):
     dir = abspath(dir)
     for p in app.get_plugin(LocalAppPlugin).add_dir_to_search_path(dir):
         print p
+
+
+@app_cli.command('run')
+@click.argument('deploy-id')
+@click.argument('service')
+@click.argument('command')
+@click.pass_obj
+def app_run(app, deploy_id, service, command):
+    """Run a command.
+    """
+    print_jobs(app.api.request(
+        'post', 'run', json={
+            'deploy_id': deploy_id,
+            'service': service, 'command': command}, stream=True))
+
+
+
+

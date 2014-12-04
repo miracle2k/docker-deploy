@@ -59,8 +59,8 @@ class UpstartBackend(DockerOnlyBackend):
         try:
             output = check_output('initctl status %s' % name, shell=True)
         except CalledProcessError:
-            # Can this happen? When the service file does not exist?
-            raise
+            # It is possible that a previous deploy failed mid-stream.
+            pass
         else:
             # If the service is not running, "initctl stop" will return
             # a failure, so skip the call in that case.

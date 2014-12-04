@@ -197,7 +197,47 @@ def setup_services(request, app):
     # Deploy the actual services.
     for name, service in services.items():
         ctx.cintf.set_service(deploy_id, name, service,
-                         force=globals_changed or force)
+                         force=force)
+
+
+@api.route('/run', methods=['POST'])
+@streaming()
+def run(request, app):
+    """
+    Run a one-off command.
+    """
+
+    data = request.get_json()
+    deploy_id = data['deploy_id']
+    sname = data['service']
+    cmd = data['command']
+
+    ctx.job('Executing "{command}" of service {service}'.format(**data))
+    service = ctx.cintf.db.deployments[deploy_id].services[sname]
+
+    runcfg, definition, _ = ctx.cintf.generate_runcfg(service, service.version)
+    runcfg['cmd'] = [cmd]
+
+    ctx.cintf.run_plugins('before_once', service, definition, runcfg)
+    exitcode = ctx.cintf.backend.once(runcfg)
+    if exitcode:
+        from deploylib.daemon.controller import DeployError
+        raise DeployError('Run job returned exit code %s' % exitcode)
+
+
+@api.route('/redeploy', methods=['POST'])
+@streaming()
+def redeploy(request, app):
+    """
+    # TODO: Do this client-side instead, ask for current service data via rest
+    """
+
+    data = request.get_json()
+    deploy_id = data['deploy_id']
+    sname = data['service']
+
+    service = ctx.cintf.db.deployments[deploy_id].services[sname]
+    ctx.cintf.set_service(deploy_id, sname, service.version.definition, force=True)
 
 
 @api.route('/upload', methods=['POST'])

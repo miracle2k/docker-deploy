@@ -254,6 +254,18 @@ def deploy(app, service_file, deploy_id, create, force):
 
 
 @main.command()
+@click.argument('deploy-id')
+@click.argument('service')
+@click.pass_obj
+def redeploy(app, deploy_id, service):
+    api = app.api
+
+    print_jobs(api.request('post', 'redeploy', json={
+            'deploy_id': deploy_id,
+            'service': service}, stream=True))
+
+
+@main.command()
 @click.pass_obj
 def list(app):
     """List deployments and services.
