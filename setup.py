@@ -26,7 +26,8 @@ setup(
         'clint>=0.3.7',
         'transaction>=1.4.3',
         'ZODB>=4.0.0',
-        'pycrypto==2.6.1'
+        'pycrypto==2.6.1',
+        'passlib==1.6.2',
     ],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
