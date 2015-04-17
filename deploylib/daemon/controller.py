@@ -317,7 +317,7 @@ class ControllerInterface(object):
                 extra_env['%s_NAME'%var_name] += ':%s' % port_name
 
         # This allows extra mappings to be used for
-        for binding, port_name in definition['wan_map'].items():
+        for binding, port_name in definition.get('wan_map', {}).items():
             cp = port_assignments[port_name]['container']
             runcfg['ports'].setdefault(cp, [])
             runcfg['ports'][cp].append(binding)
