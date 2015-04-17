@@ -77,6 +77,7 @@ class StrowgerClient:
 STROWGER = \
 """
 image: elsdoerfer/strowger
+entrypoint: [/bin/flynn-router]
 cmd:
     - '--httpaddr=:{PORT_HTTP}'
     - '--httpsaddr=:{PORT_HTTPS}'
