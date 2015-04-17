@@ -67,6 +67,13 @@ class UpstartBackend(DockerOnlyBackend):
             if not 'stop/waiting' in output:
                 check_output('initctl stop %s' % name, shell=True)
 
+        # We cannot trust initctl to stop the container, verity ourselves
+        # that it did indeed happen.
+        try:
+            check_output('docker stop %s' % name, shell=True)
+        except Exception, e:
+            print(e)
+
         # Finally  remove the service file.
         rm_upstart_conf(name)
 
