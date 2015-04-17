@@ -10,10 +10,10 @@ that run outside the "deploy container" code where the replacement vars
 are currently being put together.
 """
 
-from deploylib.plugins import Plugin
+from deploylib.plugins import LocalPlugin
 
 
-class VarsPlugin(Plugin):
+class VarsPlugin(LocalPlugin):
 
     def provide_local_vars(self, service, vars):
         for key, item in service.globals.get('Vars', {}).items():
