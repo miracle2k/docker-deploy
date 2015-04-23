@@ -103,11 +103,10 @@ def setup_strowger(app, **kwargs):
     print_jobs(app.api.setup('system', servicefile, force=True))
 
 
-class LocalStrowgerPlugin(LocalPlugin):
+class LocalDomainResolver(LocalPlugin):
     """Resolve SSL cert paths."""
 
-    def provide_cli(self, group):
-        group.add_command(setup_strowger)
+    abstract = True
 
     def file_loaded(self, services, globals, filename=None):
         domains = globals.get('Domains', {})
@@ -133,6 +132,12 @@ class LocalStrowgerPlugin(LocalPlugin):
                 if not key:
                     raise ValueError('key not found in: %s' % key_paths)
                 data['key'] = key
+
+
+class LocalStrowgerPlugin(LocalDomainResolver):
+
+    def provide_cli(self, group):
+        group.add_command(setup_strowger)
 
 
 class StrowgerPlugin(Plugin):
