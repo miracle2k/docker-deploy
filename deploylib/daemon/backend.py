@@ -140,7 +140,7 @@ class DockerOnlyBackend(object):
         result = self.client.create_container(
             image=runcfg['image'],
             name=runcfg.get('name'),
-            entrypoint=runcfg['entrypoint'],
+            entrypoint=runcfg['entrypoint'] if runcfg['entrypoint'] else None,
             command=runcfg['cmd'],
             environment=runcfg['env'],
             # Seems needs to be pre-declared (or in the image itself)
