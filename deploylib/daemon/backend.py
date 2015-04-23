@@ -92,6 +92,7 @@ class DockerOnlyBackend(object):
             runcfg['name'],
             binds=runcfg['volumes'],
             port_bindings=runcfg['ports'],
+            links=runcfg.get('links', {}),
             privileged=runcfg['privileged'])
         return instance_id, runcfg['name']
 
@@ -107,6 +108,7 @@ class DockerOnlyBackend(object):
             container,
             binds=runcfg['volumes'],
             port_bindings=runcfg['ports'],
+            links=runcfg.get('links', {}),
             privileged=runcfg['privileged'])
         return self.client.wait(container)
 
