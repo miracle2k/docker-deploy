@@ -30,7 +30,6 @@ start on (filesystem and started docker)
 stop on runlevel [!2345] or stopping docker
 respawn
 script
-  docker rm etcd
   # It would appear "started docker" does not mean docker is
   # actually ready, so wait first until it is.
   FILE=/var/run/docker.sock
@@ -38,6 +37,7 @@ script
     inotifywait -t 2 -e create \$(dirname $FILE)
   done
   sleep 1
+  docker rm etcd
   docker run --rm --name etcd -v /srv/etcd:/data.etcd -p $ip:4001:4001 -p $ip:7001:7001 coreos/etcd -name local -data-dir /data.etcd -bind-addr=0.0.0.0:4001 --peer-addr=$ip:7001
 end script
 EOF
