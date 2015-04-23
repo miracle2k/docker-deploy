@@ -1,7 +1,7 @@
 FROM ubuntu:12.04
 
 RUN apt-get update && apt-get -qy install git && apt-get clean
-RUN apt-get install -qy python-setuptools
+RUN apt-get install -qy python-setuptools dnsutils
 RUN easy_install httpie
 
 ADD start.sh /bin/start

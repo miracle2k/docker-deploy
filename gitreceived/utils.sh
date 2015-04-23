@@ -17,13 +17,13 @@ export AUTH="Authorization:$CONTROLLER_AUTH_KEY"
 
 
 function get_controller_ip() {
-    controller=$(sdutil services docker-deploy 2>&1)
+    controller=$(dig +short  docker-deploy.service.consul SRV | awk '{ printf substr($4,0,length($4)); printf ":"; print $3  }')
     exitcode=$?
     if (($exitcode > 0));  then
         echo "Controller discovery failed with $exitcode and output: $controller" >> $RECEIVE_DEBUG
         exit 1
     fi
-    echo "Controller runs at: $controller" > $RECEIVE_DEBUG
+    echo "Controller runs at: $controller" >> $RECEIVE_DEBUG
     echo $controller
 }
 

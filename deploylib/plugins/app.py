@@ -218,7 +218,7 @@ class AppPlugin(Plugin):
 
     def _get_slug_url(self, service, slug_name):
         # Put together an full url for a slug
-        shelf_ip = ctx.cintf.discover(SHELF_SD_NAME)
+        shelf_ip = ctx.cintf.discover(SHELF_SD_NAME, durable=True)
         release_id = "{}/{}:{}".format(
             service.deployment.id, service.name, slug_name)
         slug_url = 'http://{}{}'.format(shelf_ip, '/slugs/{}'.format(release_id))

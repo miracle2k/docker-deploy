@@ -68,8 +68,6 @@ volumes:
 env:
     SSH_PRIVATE_KEYS: ""
     CONTROLLER_AUTH_KEY: {authkey}
-sdutil:
-    register: true
 """
 
 

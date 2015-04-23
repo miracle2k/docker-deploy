@@ -475,30 +475,46 @@ class Controller(object):
         except ValueError:
             raise RuntimeError('Cannot determine host ip, set HOST_IP environment variable')
 
-    def discover(self, servicename):
-        # sdutil does not support specifying a discoverd host yet, which is
-        # fine with us for now since all is running on the same host.
-        try:
-            return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
-                self.get_host_ip(), servicename), shell=True).strip()
-        except CalledProcessError as e:
-            raise ServiceDiscoveryError(e)
+    def discover(self, servicename, durable=False):
+        # # sdutil does not support specifying a discoverd host yet, which is
+        # # fine with us for now since all is running on the same host.
+        # try:
+        #     return run('DISCOVERD={}:1111 sdutil services -1 {}'.format(
+        #         self.get_host_ip(), servicename), shell=True).strip()
+        # except CalledProcessError as e:
+        #     raise ServiceDiscoveryError(e)
 
-    def register(self, servicename, address):
+        import consul
+        consul = consul.Consul(self.get_host_ip())
+        service = consul.catalog.service(servicename)[1][0]
+        if durable:
+            host = '%s.service.consul' % servicename
+        else:
+            host = service['ServiceAddress'] or service['Address']
+        return '%s:%s' % (host, service['ServicePort'])
+
+    def register(self, servicename, port):
         """This is used by the controller to register itself.
         """
-        def regger():
-            try:
-                cip = os.environ.get('CONTROLLER_IP')
-                if cip:
-                    opts = '-h %s' % cip
-                else:
-                    opts = ''
-                run('DISCOVERD={0}:1111 sdutil register {opts}  {2}:{1}'.format(
-                    self.get_host_ip(), address, servicename, opts=opts), shell=True)
-            except CalledProcessError as e:
-                raise ServiceDiscoveryError(e)
-        return gevent.spawn(regger)
+        # def regger():
+        #     try:
+        #         cip = os.environ.get('CONTROLLER_IP')
+        #         if cip:
+        #             opts = '-h %s' % cip
+        #         else:
+        #             opts = ''
+        #         run('DISCOVERD={0}:1111 sdutil register {opts}  {2}:{1}'.format(
+        #             self.get_host_ip(), address, servicename, opts=opts), shell=True)
+        #     except CalledProcessError as e:
+        #         raise ServiceDiscoveryError(e)
+        # return gevent.spawn(regger)
+
+        #cip = os.environ.get('CONTROLLER_IP')
+
+        import consul
+        consul = consul.Consul(self.get_host_ip())
+        consul.agent.service.register(servicename, port=port)
+
 
     def run(self, host, port):
         # Register ourselves with service discovery
