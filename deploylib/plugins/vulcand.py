@@ -44,13 +44,6 @@ class VulcanClient:
 
     def set_http_route(self, domain, service, cert=None, key=None, auth=None,
                        auth_realm='protected', auth_mode='digest'):
-        if auth:
-            print "Skipping route that requires auth"
-            return
-        if cert or key:
-            print "Skipping HTTPs route"
-            return
-
         route = {
             'Frontend': {
                 'Id': domain,
@@ -59,14 +52,63 @@ class VulcanClient:
                 'Route': 'Host("%s")' % domain
             }
         }
-        return self.request(
+        self.request(
             'POST', '/v2/frontends', route)
+
+        if auth:
+            if auth_mode == 'digest':
+                print "vulcand does not support digest auth, using basic"
+            if len(auth) > 1:
+                print "vulcand currently only supports one user/pass pair, ignoring others."
+
+            user, password = auth.items()[0]
+            middleware = {
+                'Middleware': {
+                    "Id": "auth",
+                    "Priority": 1,
+                    "Type":"auth",
+                    "Middleware":{
+                        "Password": password,
+                        "Username": user
+                    }
+                }
+            }
+
+            self.request(
+                'POST', '/v2/frontends/%s/middlewares' % domain, middleware)
+
+        if cert and key:
+            hostconfig = {
+                "Host": {
+                    "Name": domain,
+                    "Settings": {
+                        "KeyPair": {
+                            "Cert": cert,
+                            "Key": key
+                        }
+                    }
+                }
+            }
+            self.request('POST', '/v2/hosts', hostconfig)
+
+            # Make sure the HTTPs listener is setup
+            listener = {
+                "Listener": {
+                    "Id": "https",
+                    "Protocol": "https",
+                    "Address": {
+                        "Network":"tcp",
+                        "Address":"0.0.0.0:443"
+                    }
+                }
+            }
+            self.request('POST', '/v2/listeners', listener)
 
 
 VULCAND = \
 """
-image: mailgun/vulcand:v0.8.0-beta.3
-cmd: vulcand -etcd=%s  -apiInterface=0.0.0.0 -logSeverity=INFO -port 80
+image: elsdoerfer/vulcand
+cmd: ["-etcd=%s", "-apiInterface=0.0.0.0", "-logSeverity=INFO", "-port=80"]
 ports:
   http: 80
   https: 443
