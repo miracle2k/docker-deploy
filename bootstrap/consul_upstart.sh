@@ -59,8 +59,12 @@ script
   done
   sleep 1
 
-  docker rm -f backends || true
-  docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --name backends --dns $ip  progrium/ambassadord --omnimode
+  RUNNING=$(docker inspect --format="{{ .State.Running }}" $CONTAINER 2> /dev/null)
+  if [ $? -eq 1 ]; then
+     docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --name backends --dns $ip  progrium/ambassadord --omnimode
+  else
+     docker start -a backends
+  fi
 end script
 
 post-start script
@@ -93,12 +97,10 @@ EOF
 # The upstart plugin will hook services to start on "docker-deploy".
 cat >  $UPSTART_DIR/docker-deploy.conf <<EOF
 description "docker-deploy root"
-start on started consul
-stop on stopping consul
 EOF
 
 # Disable docker attempting to restart containers
-sudo sh -c "echo 'DOCKER_OPTS=\"-r=false --dns 172.17.42.1 --dns 8.8.8.8 --dns-search service.consul\"' > /etc/default/docker"
+#sudo sh -c "echo 'DOCKER_OPTS=\"-r=false --dns 172.17.42.1 --dns 8.8.8.8 --dns-search service.consul\"' > /etc/default/docker"
 #initctl stop docker
 #initctl start docker
 
