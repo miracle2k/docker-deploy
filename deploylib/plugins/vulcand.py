@@ -138,7 +138,124 @@ class LocalVulcanPlugin(LocalDomainResolver):
         group.add_command(vulcand_cli)
 
 
-class VulcanPlugin(Plugin):
+class Listener(dict):
+    pass
+
+
+
+def only_if(service=None):
+    """A listener is only executed if the conditions (evaluated globally)
+    apply.
+    """
+
+    def decorator(func):
+        if not hasattr(func, '_listener'):
+            raise TypeError('@only_if: function does not have a listener yet.')
+
+        if not '.' in service:
+            raise ValueError('@only_if service needs to be in deployment.service format')
+        func._listener['required_services'] = [service.split('.', 1)]
+
+        return func
+    return decorator
+
+
+def each_service(globals=None):
+    """Define a handler that will be executed per-service.
+    """
+
+    def decorator(func):
+        if hasattr(func, '_listener'):
+            raise TypeError('This function already has a listener.')
+
+        func._listener = Listener({
+            'type': 'service',
+            'global_keys': [globals] if globals else []
+        })
+
+        return func
+    return decorator
+
+
+def resolve_service(service):
+    deploy_name, service_name = service
+    return ctx.cintf.db.deployments[deploy_name].has_service(service_name)
+
+
+
+class SmartPlugin(Plugin):
+    """Writing the event handler logic can be complex, since there is often
+    some dependency logic involved. For example, the plugin should do something
+    when a service is installed, but only if the plugin's own service is
+    already running. Once the plugin's service is installed, the processing
+    code needs to run for all existing services.
+
+    This allows to define the callbacks on a dependency basis. I.e. "run
+    this function" for every service, rather than on an event basis.
+
+    XXX: This has another advantage; it means that if the callback cannot
+    finished, maybe because the vulcand API is not available now, it can
+    trigger a temporary error, and the smart plugin system can reschedule
+    the call.
+    """
+
+    def _get_listeners(self):
+        # Find any listeners defined on the current class.
+        for name in dir(self):
+            attr = getattr(self, name)
+            if not hasattr(attr, '_listener'):
+                continue
+            l = attr._listener.copy()
+            l['func'] = attr
+            yield l
+
+    def _active_listeners(self, type):
+        """Return all listeners that are active, that is, their dependencies
+        are fullfilled.
+        """
+        for listener in self._get_listeners():
+            if listener['type'] != type:
+                continue
+
+            # We only do anything if all requirements are passing
+            one_missing = False
+            for deploy_name, service_name in listener.get('required_services', []):
+                if not deploy_name in ctx.cintf.db.deployments or not \
+                        ctx.cintf.db.deployments[deploy_name].has_service(service_name):
+                    one_missing = True
+                    break
+            if one_missing:
+                continue
+
+            yield listener
+
+    def _call(self, listener, *args):
+        listener['func'](*args)
+
+    def post_setup(self, service, version):
+        for listener in self._active_listeners(type='service'):
+            reqs = map(resolve_service, listener.get('required_services', []))
+            if service in reqs:
+                # Just enabled, trigger for all services
+                for name, deployment in ctx.cintf.db.deployments.items():
+                    for service in deployment.services.values():
+                        self._call(listener, service)
+
+            else:
+                self._call(listener, service)
+
+    def on_globals_changed(self, deployment):
+        for listener in self._active_listeners(type='service'):
+            # See if the listener depends on any of the keys in the globals here
+            for key in listener['global_keys']:
+                if key in deployment.globals:
+                    # Call listener for all services in this deployment
+                    for service in deployment.services.values():
+                        self._call(listener, service)
+                    break
+
+
+class VulcanPlugin(SmartPlugin):
     """Will process a Domains section, which defines domains
     and maps them to services, and register those mappings with
     the vulcan router.
@@ -148,25 +265,13 @@ class VulcanPlugin(Plugin):
      router plugin easily).
     """
 
-    def post_setup(self, service, version):
-        # The first time vulcan is setup, add routes to all domains
-        # that we know about.
-        if service.name != 'vulcand' or service.deployment.id != 'system':
-            return
-        if service.versions:
-            return
+    @only_if(service='system.vulcand')
+    @each_service(globals='Domains')
+    def setup_domains(self, service):
+        # are there any domains defined in the globals for this service?
+        deployment = service.deployment
 
-        for name, deployment in ctx.cintf.db.deployments.items():
-            ctx.cintf.get_plugin(VulcanPlugin).on_globals_changed(deployment)
-
-    def on_globals_changed(self, deployment):
         domains = deployment.globals.get('Domains', {})
-        if not domains:
-            return
-
-        # If vulcan is not setup, do nothing.
-        if not 'vulcand' in ctx.cintf.db.deployments['system'].services:
-            return
 
         api_ip = ctx.cintf.discover('system-vulcand-api')
         vulcan = VulcanClient(api_ip)
@@ -178,8 +283,21 @@ class VulcanPlugin(Plugin):
             service_name = data.get('http')
             if not service_name:
                 continue
+
+            # Vulcand does not support setting a frontend before setting
+            # the backend. Therefore, we need to delay this until the service
+            # has been setup (at which point this plugin will register the backend).
+            if not deployment.has_service(service_name):
+                continue
+
             ctx.log('%s -> %s' % (domain, service_name))
             vulcan.set_http_route(
                 domain, service_name, key=data.get('key'),
                 cert=data.get('cert'), auth=data.get('auth'),
                 auth_mode=data.get('auth_mode'))
+
+    @only_if(service='system.vulcand')
+    @each_service()
+    def setup_backends_for_service(self, service):
+        #register a backend for this service with vulcand
+        pass
