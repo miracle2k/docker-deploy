@@ -42,6 +42,15 @@ class VulcanClient:
         response.raise_for_status()
         return response.json()
 
+    def set_backend(self, name, type='http'):
+        backend = {
+            'Backend': {
+                'Id': name,
+                'Type': type,
+            }
+        }
+        self.request('POST', '/v2/backends', backend)
+
     def set_http_route(self, domain, service, cert=None, key=None, auth=None,
                        auth_realm='protected', auth_mode='digest'):
         route = {
@@ -299,5 +308,9 @@ class VulcanPlugin(SmartPlugin):
     @only_if(service='system.vulcand')
     @each_service()
     def setup_backends_for_service(self, service):
-        #register a backend for this service with vulcand
-        pass
+        # For every service, we create a backend in vulcand
+        if service.full_name == 'system-vulcand':
+            return
+        api_ip = ctx.cintf.discover('system-vulcand-api')
+        vulcan = VulcanClient(api_ip)
+        vulcan.set_backend(service.full_name)
