@@ -85,6 +85,10 @@ class DeployedService(Persistent):
         self.hold_message = None
 
     @property
+    def full_name(self):
+        return '%s-%s' % (self.deployment.id, self.name)
+
+    @property
     def latest(self):
         if not self.versions:
             return None
@@ -146,9 +150,11 @@ class DeployedService(Persistent):
         self.versions.append(version)
         return version
 
-    def append_instance(self, container_id):
-        self.instances.append(ServiceInstance(container_id, self.latest))
+    def append_instance(self, id, backend_id):
+        instance = ServiceInstance(id, backend_id, self.latest)
+        self.instances.append(instance)
         self.latest.instance_count += 1
+        return instance
 
 
 class ServiceVersion(Persistent):
@@ -165,6 +171,13 @@ class ServiceVersion(Persistent):
 class ServiceInstance(Persistent):
     """An running instance of a container."""
 
-    def __init__(self, container_id, version):
-        self.container_id = container_id
+    def __init__(self, id, backend_id, version):
+        self._id = id
+        self.container_id = backend_id
         self.version = version
+
+    @property
+    def id(self):
+        if hasattr(self, '_id'):
+            return self._id
+        return self.container_id

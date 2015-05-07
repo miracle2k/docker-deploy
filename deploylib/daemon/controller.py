@@ -370,11 +370,13 @@ class ControllerInterface(object):
             self.backend.terminate(inst.container_id)
             service.instances.remove(inst)
 
+            self.run_plugins('post_stop', service, inst)
+
         # Run the container
         instance_id = self.backend.start(runcfg, service, instance_id)
-
         service.append_version(version)
-        service.append_instance(instance_id)
+        instance = service.append_instance(runcfg['name'], instance_id)
+        self.run_plugins('post_start', service, instance, port_assignments)
         ctx.log("New instance id is %s" % instance_id[0])
 
     #####

@@ -32,11 +32,9 @@ There are some options we have for solving this:
    If we combine this with health checks, indeed we do not need registrator.
 """
 
+import consul
+from deploylib.daemon.context import ctx
 from deploylib.plugins import Plugin
-
-
-# XXX run via service definition
-#
 
 
 class RegistratorAmbassadorConsul(Plugin):
@@ -47,11 +45,47 @@ class RegistratorAmbassadorConsul(Plugin):
     This adds the environment variables to the containers for proper naming.
     """
 
+    def _ports_from_service(self, instance):
+        defined_ports = instance.version.definition['ports']
+        for port_name, container_port in defined_ports.items():
+            yield port_name
+
+    def _get_name_for_port(self, service, portname):
+        if portname:
+            return '%s-%s' % (service.full_name, portname)
+        else:
+            return service.full_name
+
+    def _get_service_id_for_port(self, service_id, portname):
+        service_id_base = 'hafez:%s' % service_id
+        if portname:
+            return '%s:%s' % (service_id_base, portname)
+        else:
+            return service_id_base
+
+    def post_start(self, service, instance, port_assignments):
+        """Add instances for all services (all ports) to consul catalog.
+        """
+        c = consul.Consul(ctx.cintf.get_host_ip())
+        for portname in self._ports_from_service(instance):
+            name = self._get_name_for_port(service, portname)
+            id = self._get_service_id_for_port(instance.id, portname)
+            print "Adding service to consul catalog: %s, id=%s" % (name, id)
+            c.agent.service.register(
+                name, service_id=id, port=port_assignments[portname]['host'])
+
+    def post_stop(self, service, instance):
+        """Remove all services for this instance fro consul
+        """
+        c = consul.Consul(ctx.cintf.get_host_ip())
+        for portname in self._ports_from_service(instance):
+            name = self._get_name_for_port(service, portname)
+            id = self._get_service_id_for_port(instance.id, portname)
+            print "Removing service from consul catalog: %s" % id
+            c.agent.service.deregister(service_id=id)
+
     def before_start(self, service, definition, runcfg, port_assignments):
         deploy_id = service.deployment.id
-
-        service_name_base = '{did}-{sname}'.format(did=deploy_id, sname=service.name)
-        service_id_base = 'hafez:%s' % runcfg['name']
 
         # I imagined this as a default, but registrator seems to ignore the
         # port-specific instructions if it finds this.
@@ -66,18 +100,13 @@ class RegistratorAmbassadorConsul(Plugin):
 
             # deploy:service:port or deploy:service for the
             # default port, indicated by an empty string.
-            if pname:
-                register_name = '%s-%s' % (service_name_base, pname)
-                register_id = '%s:%s' % (service_id_base, pname)
-            else:
-                register_name = service_name_base
-                register_id = service_id_base
+            register_name = self._get_name_for_port(service, pname)
+            register_id = self._get_service_id_for_port(runcfg['name'], pname)
 
             runcfg['env'].update({
                 'SERVICE_%s_NAME' % map['container']: register_name,
                 'SERVICE_%s_ID' % map['container']: register_id
             })
-
 
         # Use ambassadord backend to expose the services
         count = 0
