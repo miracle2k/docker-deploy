@@ -57,6 +57,8 @@ class RegistratorAmbassadorConsul(Plugin):
             return service.full_name
 
     def _get_service_id_for_port(self, service_id, portname):
+        if isinstance(service_id, tuple):
+            service_id = service_id[1]  # backwards compat hack, remove soon
         service_id_base = 'hafez:%s' % service_id
         if portname:
             return '%s:%s' % (service_id_base, portname)

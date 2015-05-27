@@ -377,7 +377,7 @@ class ControllerInterface(object):
         service.append_version(version)
         instance = service.append_instance(runcfg['name'], instance_id)
         self.run_plugins('post_start', service, instance, port_assignments)
-        ctx.log("New instance id is %s" % instance_id[0])
+        ctx.log("New instance id is %s" % instance_id)
 
     #####
 

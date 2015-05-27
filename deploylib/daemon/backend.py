@@ -94,7 +94,7 @@ class DockerOnlyBackend(object):
             port_bindings=runcfg['ports'],
             links=runcfg.get('links', {}),
             privileged=runcfg['privileged'])
-        return instance_id, runcfg['name']
+        return instance_id
 
     def terminate(self, (instance_id, name)):
         try:
