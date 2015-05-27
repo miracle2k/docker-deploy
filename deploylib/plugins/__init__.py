@@ -86,7 +86,8 @@ def load_plugins(klass, *args, **kwargs):
                 attr = getattr(module, attr_name)
                 if inspect.isclass(attr) and issubclass(attr, klass) and not \
                         attr is klass:
-                    result.append(attr(*args, **kwargs))
+                    if not 'abstract' in dir(klass) or not getattr(klass, 'abstract', True):
+                        result.append(attr(*args, **kwargs))
 
                 if isinstance(attr, klass):
                     result.append(attr)
