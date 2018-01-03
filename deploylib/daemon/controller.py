@@ -307,14 +307,16 @@ class ControllerInterface(object):
             var_name = 'PORT' if port_name == "" else 'PORT_%s' % port_name.upper()
             local_repl[var_name] = container_port
             extra_env[var_name] = container_port
-            var_name = 'SD' if port_name == "" else 'SD_%s' % port_name.upper()
-            extra_env[var_name] = ':'.join(map(str, host_port))
-            extra_env['%s_PORT'%var_name] = host_port[1]
-            extra_env['%s_HOST'%var_name] = host_port[0]
-            extra_env['%s_NAME'%var_name] = '{did}:{sname}'.format(
-                did=deployment.id, sname=service.name)
-            if port_name != "":
-                extra_env['%s_NAME'%var_name] += ':%s' % port_name
+
+            # Disabled because it forces sdutil usage of slugrunner
+            # var_name = 'SD' if port_name == "" else 'SD_%s' % port_name.upper()
+            # extra_env[var_name] = ':'.join(map(str, host_port))
+            # extra_env['%s_PORT'%var_name] = host_port[1]
+            # extra_env['%s_HOST'%var_name] = host_port[0]
+            # extra_env['%s_NAME'%var_name] = '{did}:{sname}'.format(
+            #     did=deployment.id, sname=service.name)
+            # if port_name != "":
+            #     extra_env['%s_NAME'%var_name] += ':%s' % port_name
 
         # This allows extra mappings to be used for
         for binding, port_name in definition.get('wan_map', {}).items():
@@ -366,8 +368,13 @@ class ControllerInterface(object):
         # For now, all services may only run once. If there is already
         # a container for this service, make sure it is shut down.
         for inst in service.instances:
-            ctx.log("Killing existing container %s" % inst.container_id[1])
-            self.backend.terminate(inst.container_id)
+            # Temp hack
+            if isinstance(inst.container_id, (tuple, list)):
+                container_id = inst.container_id[1]
+            else:
+                container_id = inst.container_id
+            ctx.log("Killing existing container %s" % container_id)
+            self.backend.terminate(container_id)
             service.instances.remove(inst)
 
             self.run_plugins('post_stop', service, inst)

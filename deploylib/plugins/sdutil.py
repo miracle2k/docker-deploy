@@ -138,8 +138,8 @@ class SdutilPlugin(Plugin):
         ctx.cintf.backend.pull_image(imgname)
         ctx.log('Inspecting image %s' % imgname)
         image_info = docker.inspect_image(imgname)
-        entrypoint = image_info['config']['Entrypoint']
-        cmd = image_info['config']['Cmd']
+        entrypoint = image_info['Config']['Entrypoint']
+        cmd = image_info['Config']['Cmd']
         assert isinstance(cmd, list) or cmd is None
         assert isinstance(entrypoint, list) or entrypoint is None
         return entrypoint, cmd
@@ -150,6 +150,10 @@ class SdutilPlugin(Plugin):
         sdutil_url = os.environ.get(
             'SDUTIL_URL', 'https://sdutil.s3.amazonaws.com/sdutil.linux')
         docker = ctx.cintf.backend.client
+
+        # possibly should not use the raw-image name, but the actual image version
+        #hash_of(old_img, sdutil_url)
+
         ctx.job('Building version of %s with sdutil inside' % imgname)
         newimg, output = docker.build(fileobj=BytesIO("""
 FROM {old_img}

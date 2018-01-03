@@ -22,6 +22,58 @@ Design goals include:
   the rigorous use of service discovery as simple as possible.
   
   
+What is it really?
+------------------
+
+Because we basically start with an empty YAML file, it is natural to 
+implemenent everything as plugins that jump into action based on the
+keys used. You can customize a lot. So in theory, you could
+even start supporting hard service dependencies. So what IS IT at its 
+essence?
+
+The controller, the daemon:
+
+- Defines the structure of deployment/service/service-versions. It allows
+  plugins to use their own deployment-related data structures that they
+  might need (say gitreceived).   
+
+- Defines a set_service() API by which arbitrary JSON structures can be
+  submitted within the deployment/service objects.
+  
+- These are persisted to disk, and the differences between different
+  versions of the structures can be determined.
+  
+- For some or all of the set_service() calls, the backend may be instructed
+  to take action.
+  
+- Defines a service discovery API, filled by a plugin, by which all the
+  different services can talk to each other.
+  
+
+--> It currently also knows about service instances, but I wonder if we can
+    change the design such that this concept is only introduced by a backend
+    plugin.
+    
+    - granted, the simplist of backends (docker-only) would need to support
+      it, since every container is essentially a instance.
+      
+      the entire "start" concept revolves around it.
+      
+      
+      how about a heroku backend look like?
+      
+Lets ask this pertinent question: under what circumstances can we avoid
+    implementing our own scale=4 plugin?
+    
+    - CoreOS fleet requires us to.
+    - Flynn-host requires us to.
+    - meastro-ng has to do it.
+    - flynn-controller might not, but I don't think it would be flexible
+         enough to support running custom docker containers. also, we
+         we really want to a) rely on it b) use a separate ui entirely
+         to then control it?
+  
+  
 Implementing the concept
 ------------------------
 

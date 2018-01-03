@@ -1,3 +1,13 @@
+"""
+set_service
+    include url to git in metadata part of response
+
+on git receive, push binary resource, wait for action stream to complete
+
+
+"""
+
+
 """Extends the app-plugin to allow deploying new versions via git-push.
 
 This will automatically run a "gitreceive" ssh server as part of the

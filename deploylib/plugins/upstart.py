@@ -1,3 +1,14 @@
+"""
+on_deploy
+    create file in mounted dir
+
+on_start
+    create upstart file
+
+delete
+    remove upstart file
+"""
+
 """This is designed to run services using upstart, mostly intended for
 a single-host setup.
 
@@ -53,7 +64,7 @@ class UpstartBackend(DockerOnlyBackend):
 
         return result
 
-    def terminate(self, (instance_id, name)):
+    def terminate(self, name):
         # First, stop the service; removing the initscript is not enough
         # it seems to stop it from restarting.
         try:

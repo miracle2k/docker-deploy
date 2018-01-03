@@ -1,3 +1,15 @@
+"""
+install plugin:
+    backend for each service
+post start:
+    backend for each service
+
+on global set domains:
+    set frontend for each
+
+
+"""
+
 """This processes ``Domain`` by adding domain:service maps to the
 vulcand HTTP router.
 
@@ -16,7 +28,7 @@ from . import Plugin, LocalPlugin
 import yaml
 from deploylib.client.service import ServiceFile
 from deploylib.daemon.context import ctx
-from deploylib.plugins.strowger import LocalDomainResolver
+#from deploylib.plugins.strowger import LocalDomainResolver
 
 
 ETCD_ADDRESS = 'http://etcd-4001.service.consul:4001'
@@ -142,7 +154,7 @@ def setup_vulcand(app, **kwargs):
     print_jobs(app.api.setup('system', servicefile, force=True))
 
 
-class LocalVulcanPlugin(LocalDomainResolver):
+class LocalVulcanPlugin():
     def provide_cli(self, group):
         group.add_command(vulcand_cli)
 

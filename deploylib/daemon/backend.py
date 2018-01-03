@@ -20,6 +20,7 @@ import os
 import docker
 import docker.errors
 from os import path
+from docker.utils import create_host_config, LogConfig
 
 
 class Backend(object):
@@ -75,7 +76,7 @@ class DockerOnlyBackend(object):
 
     def __init__(self, docker_url):
         self.client = docker.Client(
-            base_url=docker_url, version='1.6', timeout=10)
+            base_url=docker_url, timeout=10)
 
     def prepare(self, runcfg, service):
         cid = self.create_container(runcfg)
@@ -88,15 +89,10 @@ class DockerOnlyBackend(object):
         return cid
 
     def start(self, runcfg, service, instance_id):
-        self.client.start(
-            runcfg['name'],
-            binds=runcfg['volumes'],
-            port_bindings=runcfg['ports'],
-            links=runcfg.get('links', {}),
-            privileged=runcfg['privileged'])
+        self.client.start(runcfg['name'])
         return instance_id
 
-    def terminate(self, (instance_id, name)):
+    def terminate(self, instance_id):
         try:
             self.client.stop(instance_id, 10)
         except:
@@ -104,12 +100,7 @@ class DockerOnlyBackend(object):
 
     def once(self, runcfg):
         container = self.create_container(runcfg)
-        self.client.start(
-            container,
-            binds=runcfg['volumes'],
-            port_bindings=runcfg['ports'],
-            links=runcfg.get('links', {}),
-            privileged=runcfg['privileged'])
+        self.client.start(container)
         return self.client.wait(container)
 
     def pull_image(self, imgname):
@@ -137,6 +128,13 @@ class DockerOnlyBackend(object):
 
         # Create the container
         print "Creating container %s" % runcfg.get('name', '(unnamed)')
+        host_config = create_host_config(
+            binds=runcfg['volumes'],
+            port_bindings=runcfg['ports'],
+            links=runcfg.get('links', {}),
+            privileged=runcfg['privileged'],
+            log_config=LogConfig(type='syslog')
+        )
         result = self.client.create_container(
             image=runcfg['image'],
             name=runcfg.get('name'),
@@ -147,6 +145,8 @@ class DockerOnlyBackend(object):
             # or the binds won't work during start.
             ports=runcfg['ports'].keys(),
             volumes=runcfg['volumes'].values(),
+            # What we used to pass to start
+            host_config=host_config
         )
         container_id = result['Id']
         return container_id

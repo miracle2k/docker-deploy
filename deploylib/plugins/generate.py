@@ -1,3 +1,10 @@
+"""
+on global key set - generates the passwords as a resource
+
+- either add to all env in before_start
+- or come up with a system for variable replacement...
+"""
+
 """Supports generating text strings, like passwords::
 
     Generate:

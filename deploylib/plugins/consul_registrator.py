@@ -1,3 +1,17 @@
+"""
+post start of instance:
+    register all ports with consul
+
+post stop of instance:
+    remove all ports from consul
+
+postprocess service (before start service):
+    add registrator env vars
+
+    add ambassadord env vars, link
+"""
+
+
 """Uses consul/registrator/ambassadord for service discovery.
 
 Expects ambassadord, registrator consul to run as a host service

@@ -1,3 +1,22 @@
+"""
+we might not need this so importantly at the beginning, if we have a way to open shells manually
+- what is the usecase? for example, running a "createdb" command.
+
+- we do have a resource system
+- consider that resources could be resolved in the client only
+- difficulty: how do we handle resources that take very long to comlete and might in fact initially fail?
+
+if we do have a server system:
+    - there might be a formalized system for resources
+    - this system might be a plugin
+         (a compiled-in plugin, calling executable via CGI, simply a system to handle global gets)
+    - it would handle before_start to block the start
+
+but we want to keep it simple; this should be written in code, and be first-class.
+
+"""
+
+
 """Declare run-once resources::
 
     Run:

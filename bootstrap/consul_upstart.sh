@@ -61,7 +61,7 @@ script
 
   RUNNING=$(docker inspect --format="{{ .State.Running }}" $CONTAINER 2> /dev/null)
   if [ $? -eq 1 ]; then
-     docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --name backends --dns $ip  progrium/ambassadord --omnimode
+     docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --log-driver syslog  --name backends --dns $ip  progrium/ambassadord --omnimode
   else
      docker start -a backends
   fi
@@ -88,7 +88,7 @@ script
   sleep 1
 
   docker rm -f registrator || true
-  docker run -v /var/run/docker.sock:/tmp/docker.sock -h $(hostname) --name registrator gliderlabs/registrator -ip $ip consul://$ip:8500 -resync 60
+  docker run -v /var/run/docker.sock:/tmp/docker.sock -h $(hostname) --log-driver syslog --name registrator gliderlabs/registrator -ip $ip consul://$ip:8500 -resync 60
 end script
 EOF
 

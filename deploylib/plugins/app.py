@@ -1,3 +1,17 @@
+"""essentially a binary resource
+
+before_start
+    rewrite "app" keys to use slugbuilder + require
+
+    return upload key in metadata
+
+binary uploads are builtin
+
+on_upload
+    run slugbuilder
+    set resource as available
+"""
+
 """Runs 12-factor apps from git using flynn/slugrunner.
 
 Will automatically install flynn/shelf as part of tye system deployment to
@@ -214,6 +228,7 @@ class AppPlugin(Plugin):
 
         build_process.wait()
         if build_process.returncode:
+            # XXX also print stderr at this point
             raise DeployError('the build failed with code %s' % build_process.returncode)
 
     def _get_slug_url(self, service, slug_name):

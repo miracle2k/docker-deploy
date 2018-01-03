@@ -11,6 +11,7 @@ class DeployDB(object):
     def __init__(self):
         self.deployments = BTrees.OOBTree.BTree()
         self.auth_key = None
+        self.config = {}
 
 
 class DeployDBNew(Persistent):
@@ -19,7 +20,7 @@ class DeployDBNew(Persistent):
     def __init__(self):
         self.deployments = BTrees.OOBTree.BTree()
         self.auth_key = None
-
+        self.config = {}
 
 
 class Deployment(Persistent):

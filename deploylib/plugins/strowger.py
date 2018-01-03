@@ -1,3 +1,8 @@
+"""
+on global domain set:
+    add the routes
+"""
+
 """This processes ``Domain`` by adding domain:service maps to the
 strowger HTTP router.
 
@@ -54,7 +59,6 @@ class StrowgerClient:
         return response.json()
 
     def set_http_route(self, domain, service, cert=None, key=None, auth=None,
-                       auth_realm='protected', auth_mode='digest'):
         # Encode the passwords for the user, since strowger currently
         # expects them to be submitted has hashes.
         if auth:
@@ -102,6 +106,8 @@ def setup_strowger(app, **kwargs):
     servicefile.services = {'strowger': strowger_def}
     print_jobs(app.api.setup('system', servicefile, force=True))
 
+    # TODO: Setup all domains in all deployments.
+
 
 class LocalDomainResolver(LocalPlugin):
     """Resolve SSL cert paths."""
@@ -139,6 +145,11 @@ class LocalStrowgerPlugin(LocalDomainResolver):
     def provide_cli(self, group):
         group.add_command(setup_strowger)
 
+    def file_loaded(self, services, globals, filename=None):
+        #import pdb; pdb.set_trace()
+        return
+        #super(LocalStrowgerPlugin, self).file_loaded(services, globals, filename)
+
 
 class StrowgerPlugin(Plugin):
     """Will process a Domains section, which defines domains
@@ -163,7 +174,6 @@ class StrowgerPlugin(Plugin):
             return
 
         # If strowger is not setup, do nothing.
-        if not 'strowger' in ctx.cintf.db.deployments['system'].services:
             return
 
         api_ip = ctx.cintf.discover('router-api')
@@ -179,7 +189,7 @@ class StrowgerPlugin(Plugin):
             ctx.log('%s -> %s' % (domain, service_name))
             strowger.set_http_route(
                 domain, service_name, key=data.get('key'),
-                cert=data.get('cert'), auth=data.get('auth'),
+                                    cert=data.get('cert'))
                 auth_mode=data.get('auth_mode'))
 
         # TODO: Support further plugins to configure the domain DNS

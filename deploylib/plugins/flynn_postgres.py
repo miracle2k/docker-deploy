@@ -1,3 +1,10 @@
+"""
+on plugin activate:
+    install flynn postgres
+
+when a "Database" global key is set, start a job to create the db, when done, declare the resource..
+"""
+
 """This plugin is specifically to setup databases with the
 flynn-postgres appliance.
 
