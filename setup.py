@@ -20,7 +20,7 @@ setup(
         'click>=2.0',
         'flask>=0.10',
         'netifaces>=0.10',
-        'requests==2.2.1',
+        'requests==2.20.0',
         'pyyaml>=3.11',
         'gevent>=0.6.1',
         'clint>=0.3.7',
